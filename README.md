@@ -22,6 +22,10 @@ Built for **[The Zero Cup - 0G's Global Vibe Coding Tournament](https://0g.ai/ar
    The app reads the on-chain memory pointer and pulls the memory back from 0G Storage -
    **it remembers you**. Nothing was stored on our server.
 
+> **Ownership & access:** anyone with the link can view and chat with a Soul (a public
+> "preview"), but **only the token holder can save new memories on-chain** - enforced by
+> `setMemory`'s `ownerOf` check. Transfer the NFT and that right moves with it.
+
 This is 0G's whole thesis - *ownable, persistent, decentralized AI* - in one demo.
 
 ---

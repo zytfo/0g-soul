@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAccount, usePublicClient, useSwitchChain } from 'wagmi';
 import { appendTurn, boundHistory, type AgentState } from '@/lib/agent-core';
 import { sendChat, saveMemory, rememberSoul } from '@/lib/soul-client';
-import { useMintAgent, useSetMemory, tokenIdFromReceipt } from '@/lib/contract';
+import { useMintAgent, useSetMemory, useOwnerOf, tokenIdFromReceipt } from '@/lib/contract';
 import { galileo } from '@/lib/chain';
 
 type Entry = {
@@ -48,6 +48,9 @@ export function ChatConsole({
   const { switchChainAsync } = useSwitchChain();
   const { mint } = useMintAgent();
   const { setMemory } = useSetMemory();
+  const { data: owner } = useOwnerOf(tokenId);
+  const ownerStr = typeof owner === 'string' ? owner : undefined;
+  const isOwner = !!address && !!ownerStr && address.toLowerCase() === ownerStr.toLowerCase();
 
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -157,7 +160,15 @@ export function ChatConsole({
             </span>
           </span>
         </span>
-        {offline && <span className="glow-magenta text-xs">offline demo</span>}
+        <span className="flex items-center gap-3 text-xs">
+          {tokenId !== undefined && ownerStr && (
+            <span className="text-[var(--phosphor-dim)]">
+              owner {short(ownerStr)}
+              {isOwner && <span className="glow-amber"> (you)</span>}
+            </span>
+          )}
+          {offline && <span className="glow-magenta">offline demo</span>}
+        </span>
       </div>
 
       {/* feed */}
@@ -188,15 +199,26 @@ export function ChatConsole({
       </form>
 
       {/* actions */}
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         {tokenId === undefined ? (
           <button onClick={onMint} disabled={busy || !isConnected} className="term-btn rounded-sm px-4 py-2 text-sm">
             {isConnected ? 'save & mint ◈' : 'connect wallet to mint'}
           </button>
-        ) : (
-          <button onClick={onUpdate} disabled={busy || !isConnected} className="term-btn rounded-sm px-4 py-2 text-sm">
+        ) : isOwner ? (
+          <button onClick={onUpdate} disabled={busy} className="term-btn rounded-sm px-4 py-2 text-sm">
             update memory on-chain
           </button>
+        ) : (
+          <>
+            <button disabled className="term-btn rounded-sm px-4 py-2 text-sm">
+              update memory on-chain
+            </button>
+            <span className="text-xs text-[var(--phosphor-dim)]">
+              {isConnected
+                ? 'view only — only the owner can save new memories'
+                : 'connect the owner wallet to teach it new memories'}
+            </span>
+          </>
         )}
       </div>
     </div>

@@ -42,6 +42,17 @@ export function useMemoryOf(tokenId: bigint | undefined) {
   });
 }
 
+/** Read the on-chain owner of a tokenId (reverts for nonexistent → undefined). */
+export function useOwnerOf(tokenId: bigint | undefined) {
+  return useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: SOUL_ABI,
+    functionName: 'ownerOf',
+    args: tokenId !== undefined ? [tokenId] : undefined,
+    query: { enabled: tokenId !== undefined },
+  });
+}
+
 /** Pull the new tokenId from an AgentMinted event in a mint tx receipt. */
 export function tokenIdFromReceipt(receipt: TransactionReceipt): bigint | undefined {
   for (const log of receipt.logs) {
