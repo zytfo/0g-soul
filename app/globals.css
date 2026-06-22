@@ -1,0 +1,176 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #050806;
+  --bg-soft: #0a0f0c;
+  --phosphor: #34ff9c;
+  --phosphor-dim: #1aa86a;
+  --phosphor-deep: #0c5c3a;
+  --amber: #ffcf4a;
+  --magenta: #ff4f9d;
+  --cyan: #46e0ff;
+  --grid: rgba(52, 255, 156, 0.06);
+  --scan: rgba(0, 0, 0, 0.35);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-phosphor: var(--phosphor);
+  --color-phosphor-dim: var(--phosphor-dim);
+  --color-amber: var(--amber);
+  --color-magenta: var(--magenta);
+  --color-cyan: var(--cyan);
+  --font-display: var(--font-vt323);
+  --font-mono: var(--font-plex-mono);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--phosphor);
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+/* phosphor glow text */
+.glow {
+  text-shadow: 0 0 4px rgba(52, 255, 156, 0.55), 0 0 14px rgba(52, 255, 156, 0.25);
+}
+.glow-amber {
+  color: var(--amber);
+  text-shadow: 0 0 5px rgba(255, 207, 74, 0.55), 0 0 16px rgba(255, 207, 74, 0.25);
+}
+.glow-magenta {
+  color: var(--magenta);
+  text-shadow: 0 0 5px rgba(255, 79, 157, 0.6), 0 0 16px rgba(255, 79, 157, 0.3);
+}
+
+/* CRT background: grid + vignette */
+.crt-bg {
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 0%, rgba(52, 255, 156, 0.08), transparent 60%);
+  background-size: 32px 32px, 32px 32px, 100% 100%;
+}
+
+/* scanlines + flicker overlay */
+.crt-overlay::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--scan) 0px,
+    var(--scan) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: multiply;
+  animation: flicker 4.5s infinite steps(60);
+}
+@keyframes flicker {
+  0%, 96%, 100% { opacity: 0.55; }
+  97% { opacity: 0.42; }
+  98% { opacity: 0.7; }
+  99% { opacity: 0.5; }
+}
+
+/* blinking cursor */
+.cursor::after {
+  content: "\2588";
+  margin-left: 2px;
+  animation: blink 1s steps(2) infinite;
+  color: var(--phosphor);
+}
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* glitch (used on mint / key moments) */
+.glitch {
+  position: relative;
+  animation: glitch-shift 0.4s steps(3) infinite;
+}
+@keyframes glitch-shift {
+  0%, 100% { transform: translate(0); text-shadow: 0 0 4px rgba(52,255,156,.55); }
+  33% { transform: translate(-1px, 1px); text-shadow: 1.5px 0 var(--magenta), -1.5px 0 var(--cyan); }
+  66% { transform: translate(1px, -1px); text-shadow: -1.5px 0 var(--magenta), 1.5px 0 var(--cyan); }
+}
+
+/* staggered boot reveal */
+.reveal {
+  opacity: 0;
+  animation: reveal 0.45s ease-out forwards;
+}
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* typewriter caret line */
+.type-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* terminal frame */
+.terminal {
+  border: 1px solid var(--phosphor-deep);
+  box-shadow: 0 0 0 1px rgba(52, 255, 156, 0.08), 0 0 40px rgba(52, 255, 156, 0.08),
+    inset 0 0 80px rgba(52, 255, 156, 0.03);
+  background: linear-gradient(180deg, rgba(10, 15, 12, 0.85), rgba(5, 8, 6, 0.95));
+  backdrop-filter: blur(2px);
+}
+
+/* inputs */
+.term-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--phosphor);
+  caret-color: var(--phosphor);
+  font-family: var(--font-plex-mono), monospace;
+}
+.term-input::placeholder {
+  color: var(--phosphor-deep);
+}
+
+/* buttons */
+.term-btn {
+  border: 1px solid var(--phosphor-dim);
+  color: var(--phosphor);
+  background: rgba(52, 255, 156, 0.04);
+  transition: all 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.term-btn:hover:not(:disabled) {
+  background: var(--phosphor);
+  color: #03130b;
+  box-shadow: 0 0 18px rgba(52, 255, 156, 0.5);
+}
+.term-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* selected state — unlayered so it beats Tailwind utility layer */
+.term-btn.is-active {
+  background: var(--phosphor);
+  color: #03130b;
+  box-shadow: 0 0 18px rgba(52, 255, 156, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt-overlay::after { animation: none; }
+  .glitch { animation: none; }
+  .reveal { animation: none; opacity: 1; transform: none; }
+  .cursor::after { animation: none; }
+}
+
+/* thin scrollbar */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--phosphor-deep); border-radius: 0; }
+*::-webkit-scrollbar-track { background: transparent; }

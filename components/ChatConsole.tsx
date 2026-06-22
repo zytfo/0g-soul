@@ -1,0 +1,269 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useAccount, usePublicClient, useSwitchChain } from 'wagmi';
+import { appendTurn, boundHistory, type AgentState } from '@/lib/agent-core';
+import { sendChat, saveMemory, rememberSoul } from '@/lib/soul-client';
+import { useMintAgent, useSetMemory, tokenIdFromReceipt } from '@/lib/contract';
+import { galileo } from '@/lib/chain';
+
+type Entry = {
+  id: number;
+  role: 'sys' | 'user' | 'ai';
+  text: string;
+  tone?: 'amber' | 'magenta';
+  glitch?: boolean;
+};
+
+const EXPLORER = 'https://chainscan-galileo.0g.ai';
+let _id = 0;
+const eid = () => ++_id;
+
+export function ChatConsole({
+  initialState,
+  initialTokenId,
+  onBack,
+}: {
+  initialState: AgentState;
+  initialTokenId?: bigint;
+  onBack?: () => void;
+}) {
+  const [state, setState] = useState<AgentState>(initialState);
+  const [tokenId, setTokenId] = useState<bigint | undefined>(initialTokenId);
+  const [feed, setFeed] = useState<Entry[]>(() =>
+    initialState.history.map((m) => ({
+      id: eid(),
+      role: m.role === 'assistant' ? ('ai' as const) : ('user' as const),
+      text: m.content,
+    })),
+  );
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [working, setWorking] = useState<string | null>(null);
+
+  const { address, isConnected, chainId } = useAccount();
+  const publicClient = usePublicClient();
+  const { switchChainAsync } = useSwitchChain();
+  const { mint } = useMintAgent();
+  const { setMemory } = useSetMemory();
+
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
+  }, [feed, working]);
+
+  // compute the id OUTSIDE the updater — calling eid() inside setFeed makes it
+  // run twice under React Strict Mode and produced duplicate keys.
+  const push = (e: Omit<Entry, 'id'>) => {
+    const id = eid();
+    setFeed((f) => [...f, { ...e, id }]);
+  };
+
+  async function onSend(e: React.FormEvent) {
+    e.preventDefault();
+    const msg = input.trim();
+    if (!msg || busy) return;
+    setInput('');
+    push({ role: 'user', text: msg });
+    setBusy(true);
+    setWorking('thinking');
+    const { reply, fallback } = await sendChat(state, msg);
+    setOffline(fallback);
+    setState((s) => boundHistory(appendTurn(s, msg, reply)).state);
+    push({ role: 'ai', text: reply });
+    setWorking(null);
+    setBusy(false);
+  }
+
+  async function ensureGalileo() {
+    if (chainId !== galileo.id) {
+      await switchChainAsync({ chainId: galileo.id });
+    }
+  }
+
+  async function onMint() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await ensureGalileo();
+      setWorking('writing memory → 0G Storage');
+      const rootHash = await saveMemory(state);
+      push({ role: 'sys', text: `memory → 0G Storage ✓  root ${short(rootHash)}` });
+      setWorking('minting INFT on 0G Chain — confirm in wallet');
+      const hash = await mint(rootHash);
+      push({ role: 'sys', text: `mint tx ${short(hash)} → ${EXPLORER}/tx/${hash}` });
+      setWorking('waiting for confirmation on 0G Chain (may take ~30s)');
+      const receipt = await pollReceipt(publicClient, hash);
+      const tid = tokenIdFromReceipt(receipt);
+      if (tid === undefined) throw new Error('could not read tokenId from receipt');
+      setTokenId(tid);
+      if (address) rememberSoul(address, { tokenId: tid.toString(), name: state.name });
+      push({
+        role: 'sys',
+        tone: 'amber',
+        glitch: true,
+        text: `✦ minted Soul #${tid.toString()} — it is yours. share: ${origin()}/agent/${tid}`,
+      });
+    } catch (err) {
+      push({ role: 'sys', tone: 'magenta', text: `! ${errMsg(err)}` });
+    } finally {
+      setWorking(null);
+      setBusy(false);
+    }
+  }
+
+  async function onUpdate() {
+    if (busy || tokenId === undefined) return;
+    setBusy(true);
+    try {
+      await ensureGalileo();
+      setWorking('saving new memory → 0G Storage');
+      const rootHash = await saveMemory(state);
+      push({ role: 'sys', text: `memory → 0G Storage ✓  root ${short(rootHash)}` });
+      setWorking('updating on-chain pointer — confirm in wallet');
+      const hash = await setMemory(tokenId, rootHash);
+      push({ role: 'sys', text: `update tx ${short(hash)} → ${EXPLORER}/tx/${hash}` });
+      setWorking('waiting for confirmation on 0G Chain (may take ~30s)');
+      await pollReceipt(publicClient, hash);
+      push({ role: 'sys', tone: 'amber', text: `✦ memory updated on-chain` });
+    } catch (err) {
+      push({ role: 'sys', tone: 'magenta', text: `! ${errMsg(err)}` });
+    } finally {
+      setWorking(null);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex h-[60vh] flex-col">
+      {/* header line */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--phosphor-deep)] pb-2 text-sm">
+        <span className="flex items-center gap-3">
+          {onBack ? (
+            <button onClick={onBack} className="term-btn rounded-sm px-2 py-0.5 text-xs">
+              ‹ back
+            </button>
+          ) : (
+            <Link href="/" className="term-btn rounded-sm px-2 py-0.5 text-xs">
+              ‹ back
+            </Link>
+          )}
+          <span className="glow">
+            ◈ {state.name}{' '}
+            <span className="text-[var(--phosphor-dim)]">
+              {tokenId !== undefined ? `· Soul #${tokenId.toString()}` : '· unminted'}
+            </span>
+          </span>
+        </span>
+        {offline && <span className="glow-magenta text-xs">offline demo</span>}
+      </div>
+
+      {/* feed */}
+      <div ref={scroller} className="flex-1 space-y-2 overflow-y-auto pr-1">
+        {feed.map((m) => (
+          <Line key={m.id} entry={m} agentName={state.name} />
+        ))}
+        {working && (
+          <p className="text-[var(--phosphor-dim)] text-sm">
+            <span className="text-[var(--phosphor-deep)]">sys:</span> {working}
+            <span className="cursor" />
+          </p>
+        )}
+      </div>
+
+      {/* input */}
+      <form onSubmit={onSend} className="mt-3 flex items-center gap-2 border-t border-[var(--phosphor-deep)] pt-3">
+        <span className="glow shrink-0">{'>'}</span>
+        <input
+          className="term-input flex-1"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={busy ? '…' : `talk to ${state.name}`}
+          aria-label={`talk to ${state.name}`}
+          disabled={busy}
+          autoFocus
+        />
+      </form>
+
+      {/* actions */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {tokenId === undefined ? (
+          <button onClick={onMint} disabled={busy || !isConnected} className="term-btn rounded-sm px-4 py-2 text-sm">
+            {isConnected ? 'save & mint ◈' : 'connect wallet to mint'}
+          </button>
+        ) : (
+          <button onClick={onUpdate} disabled={busy || !isConnected} className="term-btn rounded-sm px-4 py-2 text-sm">
+            update memory on-chain
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Line({ entry, agentName }: { entry: Entry; agentName: string }) {
+  const label =
+    entry.role === 'user' ? 'you' : entry.role === 'ai' ? agentName.toLowerCase() : 'sys';
+  const cls =
+    entry.role === 'sys'
+      ? entry.tone === 'amber'
+        ? 'glow-amber'
+        : entry.tone === 'magenta'
+          ? 'glow-magenta'
+          : 'text-[var(--phosphor-dim)]'
+      : entry.role === 'ai'
+        ? 'glow'
+        : 'text-[var(--phosphor)]';
+  return (
+    <p className={`type-line reveal text-sm ${cls} ${entry.glitch ? 'glitch' : ''}`}>
+      <span className="text-[var(--phosphor-deep)] select-none">{label}: </span>
+      {linkify(entry.text)}
+    </p>
+  );
+}
+
+/** Render any http(s) URLs in the text as clickable links. */
+function linkify(text: string) {
+  return text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline decoration-dotted underline-offset-2 break-all hover:opacity-75"
+      >
+        {part}
+      </a>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
+  );
+}
+
+type PClient = ReturnType<typeof usePublicClient>;
+
+/** Robustly wait for a tx receipt by polling — survives testnet propagation lag. */
+async function pollReceipt(client: PClient, hash: `0x${string}`, timeoutMs = 120_000, intervalMs = 3_000) {
+  if (!client) throw new Error('no RPC client available');
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const r = await client.getTransactionReceipt({ hash });
+      if (r) return r;
+    } catch {
+      // receipt not propagated yet — keep polling
+    }
+    await new Promise((res) => setTimeout(res, intervalMs));
+  }
+  throw new Error('not confirmed in 120s — check the explorer link above; the tx likely succeeded');
+}
+
+const short = (s: string) => (s.length > 14 ? `${s.slice(0, 8)}…${s.slice(-4)}` : s);
+const origin = () => (typeof window !== 'undefined' ? window.location.origin : '');
+const errMsg = (e: unknown) => {
+  const m = e instanceof Error ? e.message : 'something went wrong';
+  return m.length > 120 ? m.slice(0, 120) + '…' : m;
+};
