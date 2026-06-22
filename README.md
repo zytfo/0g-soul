@@ -11,7 +11,7 @@ Built for **[The Zero Cup - 0G's Global Vibe Coding Tournament](https://0g.ai/ar
 
 ---
 
-## The "wow" in 30 seconds
+## How it works
 
 1. **Create** a companion - give it a name and a personality.
 2. **Chat** with it. Every reply is generated through **0G Compute** (decentralized GPUs).
@@ -102,16 +102,6 @@ npm test                                               # agent-core unit tests
 node --env-file=.env.local scripts/smoke-compute.mjs   # verify 0G Compute
 node --env-file=.env.local scripts/smoke-storage.mjs   # verify 0G Storage round-trip
 ```
-
----
-
-## Roadmap (tournament meta: improve & resubmit)
-
-- **Now (group stage):** create → chat (0G Compute) → memory (0G Storage) → mint
-  (ERC-721) → reload-and-remember. ✅
-- **Next:** full **ERC-7857 (INFT)** - encrypted, *transferable* memory, so handing
-  over the NFT hands over the relationship.
-- **Later:** agent marketplace, AI-generated avatars, agent-vs-agent.
 
 ---
 
