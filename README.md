@@ -5,6 +5,8 @@
 > Close the tab, switch devices, hand it to a friend: it still remembers you,
 > because its brain lives on-chain.
 
+**▶ Live demo: [0g-soul.vercel.app](https://0g-soul.vercel.app)**
+
 Built for **[The Zero Cup - 0G's Global Vibe Coding Tournament](https://0g.ai/arena/zero-cup)**.
 
 ---

@@ -16,19 +16,20 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Soul — an AI you actually own",
+  metadataBase: new URL("https://0g-soul.vercel.app"),
+  title: "Soul",
   description:
     "Create an AI companion whose memory lives on 0G Storage and whom you mint as an NFT on the 0G chain.",
   icons: { icon: "/icon.png", apple: "/logo.png" },
   openGraph: {
-    title: "Soul — an AI you actually own",
+    title: "Soul",
     description:
       "An AI companion whose memory lives on decentralized 0G Storage, minted as an NFT on the 0G chain.",
     images: [{ url: "/logo.png", width: 1024, height: 1024, alt: "Soul" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Soul — an AI you actually own",
+    title: "Soul",
     description:
       "An AI companion whose memory lives on decentralized 0G Storage, minted as an NFT on the 0G chain.",
     images: ["/logo.png"],
