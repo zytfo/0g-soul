@@ -2,13 +2,16 @@ import { ethers } from 'ethers';
 import { readFile } from 'node:fs/promises';
 
 const RPC = 'https://evmrpc-testnet.0g.ai';
-const ADDR = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0x04188499fe778A30c611baF6c7331b0d4Bbf7ED0';
-const abi = JSON.parse(await readFile('/tmp/soul-build/contracts_SoulAgent_sol_SoulAgent.abi', 'utf8'));
+const ADDR = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
+const abi = JSON.parse(await readFile('/tmp/soul-build2/contracts_SoulAgentV2_sol_SoulAgentV2.abi', 'utf8'));
 
 const w = new ethers.Wallet(process.env.PRIVATE_KEY, new ethers.JsonRpcProvider(RPC));
 const c = new ethers.Contract(ADDR, abi, w);
 
-const rc = await (await c.mint('0xroothash_one')).wait();
+console.log('Contract:', ADDR);
+
+// mint
+const rc = await (await c.mint('0xsmoke_roothash_v2')).wait();
 let tokenId;
 for (const log of rc.logs) {
   try {
@@ -19,8 +22,8 @@ for (const log of rc.logs) {
     }
   } catch {}
 }
+
 console.log('memoryOf:', await c.memoryOf(tokenId));
-await (await c.setMemory(tokenId, '0xroothash_two')).wait();
-console.log('memoryOf after setMemory:', await c.memoryOf(tokenId));
-console.log('ownerOf:', await c.ownerOf(tokenId));
+console.log('tokenURI:', await c.tokenURI(tokenId));
+console.log('ownerOf :', await c.ownerOf(tokenId));
 console.log('OK');

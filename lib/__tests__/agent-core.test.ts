@@ -53,3 +53,8 @@ describe('boundHistory', () => {
     expect(overflow).toHaveLength(4);
   });
 });
+
+it('preserves avatarRootHash through appendTurn', () => {
+  const s = { version: 1 as const, name: 'Nova', personality: 'x', memorySummary: '', keyFacts: [], history: [], avatarRootHash: '0xabc' };
+  expect(appendTurn(s, 'hi', 'yo').avatarRootHash).toBe('0xabc');
+});

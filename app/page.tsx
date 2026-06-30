@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { Terminal, SoulBanner } from '@/components/Terminal';
 import { ChatConsole } from '@/components/ChatConsole';
-import { listSouls, type SoulRef } from '@/lib/soul-client';
+import { listSouls, avatarUrl, type SoulRef } from '@/lib/soul-client';
 import type { AgentState } from '@/lib/agent-core';
 
 const PRESETS = [
@@ -28,6 +28,9 @@ export default function Home() {
   const [name, setName] = useState('');
   const [persona, setPersona] = useState(PRESETS[0].value);
   const [state, setState] = useState<AgentState | null>(null);
+  const [avatarRootHash, setAvatarRootHash] = useState<string>();
+  const [genning, setGenning] = useState(false);
+  const [genError, setGenError] = useState<string>();
   const { address } = useAccount();
   const [souls, setSouls] = useState<SoulRef[]>([]);
   useEffect(() => {
@@ -44,6 +47,7 @@ export default function Home() {
       memorySummary: '',
       keyFacts: [],
       history: [],
+      avatarRootHash,
     });
     setStage('chat');
   }
@@ -81,7 +85,9 @@ export default function Home() {
                     href={`/agent/${s.tokenId}`}
                     className="flex items-center justify-between border border-[var(--phosphor-deep)] px-3 py-2 text-sm transition-colors hover:bg-[rgba(52,255,156,0.06)]"
                   >
-                    <span className="glow">
+                    <span className="flex items-center gap-2 glow">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/logo.png" alt="" className="h-6 w-6 shrink-0" />
                       ◈ {s.name}{' '}
                       <span className="text-[var(--phosphor-dim)]">· Soul #{s.tokenId}</span>
                     </span>
@@ -129,6 +135,47 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                disabled={genning}
+                className="term-btn rounded-sm px-3 py-2 text-xs"
+                onClick={async () => {
+                  setGenning(true);
+                  setGenError(undefined);
+                  try {
+                    const res = await fetch('/api/avatar', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ personality: persona }),
+                    });
+                    const j = await res.json().catch(() => ({}));
+                    if (!res.ok || !j.rootHash) throw new Error(j.error || `generation failed (${res.status})`);
+                    setAvatarRootHash(j.rootHash);
+                  } catch (err) {
+                    setGenError(err instanceof Error ? err.message : 'generation failed');
+                  } finally {
+                    setGenning(false);
+                  }
+                }}
+              >
+                {genning
+                  ? 'rendering on 0G Compute… ~30s'
+                  : avatarRootHash
+                    ? 'regenerate face'
+                    : 'generate face (0G image model)'}
+              </button>
+              {genError && <p className="text-xs glow-magenta">! {genError}</p>}
+              {avatarRootHash && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarUrl(avatarRootHash)}
+                  alt="avatar preview"
+                  className="mt-2 h-20 w-20 rounded-sm border border-[var(--phosphor-deep)]"
+                />
+              )}
             </div>
 
             <button type="submit" className="term-btn glow rounded-sm px-5 py-2 text-sm">

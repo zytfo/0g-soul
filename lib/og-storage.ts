@@ -38,3 +38,29 @@ export async function downloadMemory(rootHash: string): Promise<AgentState> {
     await unlink(out).catch(() => {});
   }
 }
+
+/** Upload raw bytes to 0G Storage; returns root hash. */
+export async function uploadBytes(bytes: Uint8Array): Promise<{ rootHash: string }> {
+  const indexer = new Indexer(INDEXER);
+  const blob = new MemData(bytes);
+  const [tree, treeErr] = await blob.merkleTree();
+  if (treeErr || !tree) throw new Error(`merkleTree: ${treeErr ?? 'null tree'}`);
+  const rootHash = tree.rootHash();
+  if (!rootHash) throw new Error('merkleTree: null root hash');
+  const [, uploadErr] = await indexer.upload(blob, RPC, signer());
+  if (uploadErr) throw new Error(`upload: ${uploadErr}`);
+  return { rootHash };
+}
+
+/** Download raw bytes from 0G Storage by root hash (serverless: via /tmp). */
+export async function downloadBytes(rootHash: string): Promise<Uint8Array> {
+  const indexer = new Indexer(INDEXER);
+  const out = `/tmp/${rootHash.replace(/[^a-z0-9]/gi, '')}-${randomUUID()}.bin`;
+  const err = await indexer.download(rootHash, out, true);
+  if (err) throw new Error(`download: ${err}`);
+  try {
+    return new Uint8Array(await readFile(out));
+  } finally {
+    await unlink(out).catch(() => {});
+  }
+}

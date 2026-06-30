@@ -1,0 +1,45 @@
+'use client';
+import type { AgentState } from '@/lib/agent-core';
+
+const EXPLORER = 'https://chainscan-galileo.0g.ai';
+
+export function MemoryPanel({
+  state,
+  tokenId,
+  memoryRootHash,
+}: {
+  state: AgentState;
+  tokenId?: bigint;
+  memoryRootHash?: string;
+}) {
+  return (
+    <aside className="terminal rounded-sm p-3 text-xs space-y-2 md:max-h-full md:overflow-y-auto">
+      <p className="text-[var(--phosphor-dim)]">// memory.state</p>
+      <Row k="name" v={state.name} />
+      <Row k="token" v={tokenId !== undefined ? `#${tokenId}` : 'unminted'} />
+      <Row k="summary" v={state.memorySummary || '(forming…)'} />
+      <div>
+        <span className="text-[var(--phosphor-deep)]">facts:</span>
+        <ul className="mt-1 space-y-0.5">
+          {state.keyFacts.length ? state.keyFacts.map((f, i) => <li key={i} className="glow">• {f}</li>)
+            : <li className="text-[var(--phosphor-deep)]">none yet</li>}
+        </ul>
+      </div>
+      {memoryRootHash && (
+        <p className="break-all" title={memoryRootHash}>
+          <span className="text-[var(--phosphor-deep)]">0G Storage root:</span>{' '}
+          <span className="glow">{memoryRootHash.slice(0, 10)}…{memoryRootHash.slice(-6)}</span>
+        </p>
+      )}
+      {tokenId !== undefined && process.env.NEXT_PUBLIC_CONTRACT_ADDRESS && (
+        <p>
+          <span className="text-[var(--phosphor-deep)]">contract:</span>{' '}
+          <a className="underline decoration-dotted" href={`${EXPLORER}/address/${process.env.NEXT_PUBLIC_CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer">on 0G Chain ›</a>
+        </p>
+      )}
+    </aside>
+  );
+}
+function Row({ k, v }: { k: string; v: string }) {
+  return <p><span className="text-[var(--phosphor-deep)]">{k}:</span> <span className="glow">{v}</span></p>;
+}

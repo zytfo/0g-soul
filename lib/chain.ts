@@ -11,7 +11,7 @@ export const galileo = defineChain({
 });
 
 export const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
-  '0xc2cC37d16Bb04E6004E3f19CBb079aC21094121A') as `0x${string}`;
+  '0x04188499fe778A30c611baF6c7331b0d4Bbf7ED0') as `0x${string}`;
 
 /** Minimal typed ABI — only the parts the frontend uses. */
 export const SOUL_ABI = [
@@ -45,6 +45,17 @@ export const SOUL_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'tokenId', type: 'uint256' }],
     outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'safeTransferFrom',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'tokenId', type: 'uint256' },
+    ],
+    outputs: [],
   },
   {
     type: 'event',

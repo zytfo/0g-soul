@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAccount, usePublicClient, useSwitchChain } from 'wagmi';
 import { appendTurn, boundHistory, type AgentState } from '@/lib/agent-core';
-import { sendChat, saveMemory, rememberSoul } from '@/lib/soul-client';
-import { useMintAgent, useSetMemory, useOwnerOf, tokenIdFromReceipt } from '@/lib/contract';
+import { sendChatStream, saveMemory, rememberSoul, avatarUrl } from '@/lib/soul-client';
+import { useMintAgent, useSetMemory, useOwnerOf, tokenIdFromReceipt, useTransfer } from '@/lib/contract';
 import { galileo } from '@/lib/chain';
+import { MemoryPanel } from '@/components/MemoryPanel';
 
 type Entry = {
   id: number;
@@ -42,12 +43,14 @@ export function ChatConsole({
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
+  const [memoryRootHash, setMemoryRootHash] = useState<string>();
 
   const { address, isConnected, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { switchChainAsync } = useSwitchChain();
   const { mint } = useMintAgent();
   const { setMemory } = useSetMemory();
+  const { transfer } = useTransfer();
   const { data: owner } = useOwnerOf(tokenId);
   const ownerStr = typeof owner === 'string' ? owner : undefined;
   const isOwner = !!address && !!ownerStr && address.toLowerCase() === ownerStr.toLowerCase();
@@ -72,10 +75,18 @@ export function ChatConsole({
     push({ role: 'user', text: msg });
     setBusy(true);
     setWorking('thinking');
-    const { reply, fallback } = await sendChat(state, msg);
+    const aiId = eid();
+    setFeed((f) => [...f, { id: aiId, role: 'ai', text: '' }]);
+    const onToken = (delta: string) => {
+      setWorking(null);
+      setFeed((f) => f.map((m) => (m.id === aiId ? { ...m, text: m.text + delta } : m)));
+    };
+    const { text, fallback } = await sendChatStream(state, msg, onToken);
+    // reconcile the displayed entry to the authoritative final text (replaces any
+    // partial stream or fallback so display always matches committed state)
+    setFeed((f) => f.map((m) => (m.id === aiId ? { ...m, text } : m)));
     setOffline(fallback);
-    setState((s) => boundHistory(appendTurn(s, msg, reply)).state);
-    push({ role: 'ai', text: reply });
+    setState((s) => boundHistory(appendTurn(s, msg, text)).state);
     setWorking(null);
     setBusy(false);
   }
@@ -93,6 +104,7 @@ export function ChatConsole({
       await ensureGalileo();
       setWorking('writing memory → 0G Storage');
       const rootHash = await saveMemory(state);
+      setMemoryRootHash(rootHash);
       push({ role: 'sys', text: `memory → 0G Storage ✓  root ${short(rootHash)}` });
       setWorking('minting INFT on 0G Chain — confirm in wallet');
       const hash = await mint(rootHash);
@@ -124,6 +136,7 @@ export function ChatConsole({
       await ensureGalileo();
       setWorking('saving new memory → 0G Storage');
       const rootHash = await saveMemory(state);
+      setMemoryRootHash(rootHash);
       push({ role: 'sys', text: `memory → 0G Storage ✓  root ${short(rootHash)}` });
       setWorking('updating on-chain pointer — confirm in wallet');
       const hash = await setMemory(tokenId, rootHash);
@@ -153,7 +166,15 @@ export function ChatConsole({
               ‹ back
             </Link>
           )}
-          <span className="glow">
+          <span className="flex items-center gap-2 glow">
+            {state.avatarRootHash && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl(state.avatarRootHash)}
+                alt=""
+                className="h-7 w-7 rounded-sm"
+              />
+            )}
             ◈ {state.name}{' '}
             <span className="text-[var(--phosphor-dim)]">
               {tokenId !== undefined ? `· Soul #${tokenId.toString()}` : '· unminted'}
@@ -171,17 +192,22 @@ export function ChatConsole({
         </span>
       </div>
 
-      {/* feed */}
-      <div ref={scroller} className="flex-1 space-y-2 overflow-y-auto pr-1">
-        {feed.map((m) => (
-          <Line key={m.id} entry={m} agentName={state.name} />
-        ))}
-        {working && (
-          <p className="text-[var(--phosphor-dim)] text-sm">
-            <span className="text-[var(--phosphor-deep)]">sys:</span> {working}
-            <span className="cursor" />
-          </p>
-        )}
+      {/* feed + memory panel */}
+      <div className="flex-1 grid grid-rows-[1fr_auto] md:grid-rows-[1fr] md:grid-cols-[1fr_220px] gap-4 min-h-0">
+        {/* feed */}
+        <div ref={scroller} className="space-y-2 overflow-y-auto pr-1 min-h-0">
+          {feed.map((m) => (
+            <Line key={m.id} entry={m} agentName={state.name} />
+          ))}
+          {working && (
+            <p className="text-[var(--phosphor-dim)] text-sm">
+              <span className="text-[var(--phosphor-deep)]">sys:</span> {working}
+              <span className="cursor" />
+            </p>
+          )}
+        </div>
+        {/* memory panel */}
+        <MemoryPanel state={state} tokenId={tokenId} memoryRootHash={memoryRootHash} />
       </div>
 
       {/* input */}
@@ -205,9 +231,39 @@ export function ChatConsole({
             {isConnected ? 'save & mint ◈' : 'connect wallet to mint'}
           </button>
         ) : isOwner ? (
-          <button onClick={onUpdate} disabled={busy} className="term-btn rounded-sm px-4 py-2 text-sm">
-            update memory on-chain
-          </button>
+          <>
+            <button onClick={onUpdate} disabled={busy} className="term-btn rounded-sm px-4 py-2 text-sm">
+              update memory on-chain
+            </button>
+            <button
+              onClick={async () => {
+                const to = prompt('transfer to address (0x…):')?.trim();
+                if (!to || !/^0x[a-fA-F0-9]{40}$/.test(to)) {
+                  push({ role: 'sys', tone: 'magenta', text: '! invalid address' });
+                  return;
+                }
+                setBusy(true);
+                try {
+                  await ensureGalileo();
+                  setWorking('transferring on 0G Chain — confirm in wallet');
+                  const hash = await transfer(address as `0x${string}`, to as `0x${string}`, tokenId);
+                  push({ role: 'sys', text: `transfer tx ${short(hash)} → ${EXPLORER}/tx/${hash}` });
+                  setWorking('waiting for confirmation on 0G Chain (may take ~30s)');
+                  await pollReceipt(publicClient, hash);
+                  push({ role: 'sys', tone: 'amber', glitch: true, text: `✦ transferred Soul #${tokenId} to ${short(to)} — they now own it and its memory rights` });
+                } catch (e) {
+                  push({ role: 'sys', tone: 'magenta', text: `! ${errMsg(e)}` });
+                } finally {
+                  setWorking(null);
+                  setBusy(false);
+                }
+              }}
+              disabled={busy}
+              className="term-btn rounded-sm px-4 py-2 text-sm"
+            >
+              transfer ◈
+            </button>
+          </>
         ) : (
           <>
             <button disabled className="term-btn rounded-sm px-4 py-2 text-sm">

@@ -6,6 +6,7 @@ export type AgentState = {
   memorySummary: string;
   keyFacts: string[];
   history: ChatMessage[];
+  avatarRootHash?: string;
 };
 export type PromptMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 

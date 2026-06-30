@@ -31,6 +31,14 @@ export function useSetMemory() {
   return { setMemory, isPending };
 }
 
+/** Transfer a Soul NFT to another address (must be the current owner). */
+export function useTransfer() {
+  const { writeContractAsync, isPending } = useWriteContract();
+  const transfer = (from: `0x${string}`, to: `0x${string}`, tokenId: bigint) =>
+    writeContractAsync({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'safeTransferFrom', args: [from, to, tokenId] });
+  return { transfer, isPending };
+}
+
 /** Read an agent's current memory root hash by tokenId. */
 export function useMemoryOf(tokenId: bigint | undefined) {
   return useReadContract({

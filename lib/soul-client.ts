@@ -1,24 +1,40 @@
 import type { AgentState } from './agent-core';
 
-/** Send a chat turn. Falls back to a canned reply if the Compute route fails. */
-export async function sendChat(
+/** Returns the URL for a soul avatar. Falls back to /logo.png when no rootHash is set. */
+export const avatarUrl = (rootHash?: string) =>
+  rootHash ? `/api/avatar?rootHash=${rootHash}` : '/logo.png';
+
+/** Stream a chat turn. Falls back to a canned reply if the Compute route fails or returns empty.
+ *  On fallback, returns the canned text WITHOUT appending via onToken — the caller reconciles the
+ *  displayed entry to the returned `text`, so a partial stream + fallback never concatenate. */
+export async function sendChatStream(
   state: AgentState,
   message: string,
-): Promise<{ reply: string; fallback: boolean }> {
+  onToken: (delta: string) => void,
+): Promise<{ text: string; fallback: boolean }> {
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ state, message }),
     });
-    if (!res.ok) throw new Error(await errorText(res));
-    const { reply } = await res.json();
-    return { reply, fallback: false };
+    if (!res.ok || !res.body) throw new Error('chat failed');
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      if (chunk) { text += chunk; onToken(chunk); }
+    }
+    const tail = decoder.decode(); // flush any buffered multi-byte tail
+    if (tail) { text += tail; onToken(tail); }
+    if (!text.trim()) throw new Error('empty stream');
+    return { text, fallback: false };
   } catch {
-    return {
-      reply: `[0G Compute link unstable — local echo] I'm still here, ${state.name || 'friend'}. Say that again in a moment.`,
-      fallback: true,
-    };
+    const reply = `[0G Compute link unstable — local echo] I'm still here, ${state.name || 'friend'}. Say that again in a moment.`;
+    return { text: reply, fallback: true };
   }
 }
 

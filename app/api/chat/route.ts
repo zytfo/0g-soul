@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { buildMessages, type AgentState, type PromptMessage } from '@/lib/agent-core';
-import { chat } from '@/lib/og-compute';
+import { chatStream } from '@/lib/og-compute';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -9,16 +9,27 @@ export const maxDuration = 30;
 // `state.history`. The route appends it after buildMessages(state); if the
 // client also pushed it into history, the model would see the turn twice.
 export async function POST(req: NextRequest) {
+  let state: AgentState, message: string;
   try {
-    const { state, message } = (await req.json()) as { state: AgentState; message: string };
-    if (!state || typeof message !== 'string') {
-      return NextResponse.json({ error: 'state and message are required' }, { status: 400 });
-    }
-    const msgs: PromptMessage[] = [...buildMessages(state), { role: 'user', content: message }];
-    const reply = await chat(msgs);
-    return NextResponse.json({ reply });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'chat failed';
-    return NextResponse.json({ error: msg }, { status: 500 });
+    ({ state, message } = (await req.json()) as { state: AgentState; message: string });
+  } catch {
+    return new Response(JSON.stringify({ error: 'invalid body' }), { status: 400 });
   }
+  if (!state || typeof message !== 'string') {
+    return new Response(JSON.stringify({ error: 'state and message are required' }), { status: 400 });
+  }
+  const msgs: PromptMessage[] = [...buildMessages(state), { role: 'user', content: message }];
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const delta of await chatStream(msgs)) controller.enqueue(encoder.encode(delta));
+      } catch {
+        // send nothing and close cleanly; the client's empty-stream check triggers its fallback
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
 }
