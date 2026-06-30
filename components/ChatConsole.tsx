@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAccount, usePublicClient, useSwitchChain } from 'wagmi';
 import { appendTurn, boundHistory, type AgentState } from '@/lib/agent-core';
-import { sendChatStream, saveMemory, rememberSoul, avatarUrl } from '@/lib/soul-client';
+import { sendChatStream, saveMemory, rememberSoul, forgetSoul, avatarUrl } from '@/lib/soul-client';
 import { useMintAgent, useSetMemory, useOwnerOf, tokenIdFromReceipt, useTransfer } from '@/lib/contract';
 import { galileo } from '@/lib/chain';
 import { MemoryPanel } from '@/components/MemoryPanel';
@@ -250,6 +250,7 @@ export function ChatConsole({
                   push({ role: 'sys', text: `transfer tx ${short(hash)} → ${EXPLORER}/tx/${hash}` });
                   setWorking('waiting for confirmation on 0G Chain (may take ~30s)');
                   await pollReceipt(publicClient, hash);
+                  if (address) forgetSoul(address, tokenId.toString()); // drop from this wallet's local registry
                   push({ role: 'sys', tone: 'amber', glitch: true, text: `✦ transferred Soul #${tokenId} to ${short(to)} — they now own it and its memory rights` });
                 } catch (e) {
                   push({ role: 'sys', tone: 'magenta', text: `! ${errMsg(e)}` });

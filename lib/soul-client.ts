@@ -89,6 +89,12 @@ export function rememberSoul(addr: string, ref: SoulRef) {
   } catch {}
 }
 
+export function forgetSoul(addr: string, tokenId: string) {
+  try {
+    localStorage.setItem(OWNED(addr), JSON.stringify(listSouls(addr).filter((s) => s.tokenId !== tokenId)));
+  } catch {}
+}
+
 export function listSouls(addr: string): SoulRef[] {
   try {
     const raw = localStorage.getItem(OWNED(addr));
