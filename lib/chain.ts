@@ -58,6 +58,13 @@ export const SOUL_ABI = [
     outputs: [],
   },
   {
+    type: 'function',
+    name: 'nextId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
     type: 'event',
     name: 'AgentMinted',
     inputs: [

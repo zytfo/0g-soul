@@ -7,6 +7,10 @@ describe('avatarPrompt', () => {
     expect(p.toLowerCase()).toContain('soul');
     expect(p.toLowerCase()).toContain('pixel');
   });
+  it('weaves the personality text into the prompt', () => {
+    const p = avatarPrompt('a grumpy space pirate who loves cats');
+    expect(p).toContain('grumpy space pirate who loves cats');
+  });
   it('maps the four presets to mutually distinct color directives', () => {
     const prompts = [
       avatarPrompt('warm, witty'),

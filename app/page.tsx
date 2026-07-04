@@ -13,10 +13,14 @@ const PRESETS = [
   { label: 'stoic mentor', value: 'a calm, stoic mentor who speaks in short, weighty sentences' },
   { label: 'chaotic gremlin', value: 'a chaotic, mischievous gremlin who teases lovingly' },
   { label: 'dreamy poet', value: 'a dreamy poet who notices small beautiful details' },
+  { label: 'sarcastic hacker', value: 'a sarcastic hacker who speaks in dry one-liners and terminal slang' },
+  { label: 'noir detective', value: 'a world-weary noir detective narrating life like a case' },
+  { label: 'wise grandmother', value: 'a warm wise grandmother full of stories and gentle advice' },
+  { label: 'hype coach', value: 'an over-the-top hype coach who believes in you relentlessly' },
 ];
 
 const BOOT = [
-  'booting soul kernel v0.1 …',
+  'booting soul kernel v0.3 …',
   'mounting 0G Storage … ok',
   'linking 0G Compute router … ok',
   'attaching 0G Chain (galileo:16602) … ok',
@@ -27,6 +31,8 @@ export default function Home() {
   const [stage, setStage] = useState<'create' | 'chat'>('create');
   const [name, setName] = useState('');
   const [persona, setPersona] = useState(PRESETS[0].value);
+  const [custom, setCustom] = useState(false);
+  const [customText, setCustomText] = useState('');
   const [state, setState] = useState<AgentState | null>(null);
   const [avatarRootHash, setAvatarRootHash] = useState<string>();
   const [genning, setGenning] = useState(false);
@@ -40,10 +46,11 @@ export default function Home() {
   function create(e: React.FormEvent) {
     e.preventDefault();
     const n = name.trim() || 'Nova';
+    const activePersona = custom && customText.trim() ? customText.trim() : persona;
     setState({
       version: 1,
       name: n,
-      personality: persona,
+      personality: activePersona,
       memorySummary: '',
       keyFacts: [],
       history: [],
@@ -70,6 +77,12 @@ export default function Home() {
                 <span className="text-[var(--phosphor-deep)]">›</span> {l}
               </p>
             ))}
+          </div>
+
+          <div className="reveal" style={{ animationDelay: `${0.15 + BOOT.length * 0.25}s` }}>
+            <Link href="/explore" className="reveal inline-block text-sm text-[var(--phosphor-dim)] underline decoration-dotted">
+              explore the soul gallery ›
+            </Link>
           </div>
 
           {souls.length > 0 && (
@@ -120,21 +133,52 @@ export default function Home() {
 
             <div>
               <span className="text-sm text-[var(--phosphor-dim)]">choose a personality</span>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {PRESETS.map((p) => (
-                  <button
-                    type="button"
-                    key={p.label}
-                    onClick={() => setPersona(p.value)}
-                    aria-pressed={persona === p.value}
-                    className={`term-btn rounded-sm px-3 py-2 text-left text-xs ${
-                      persona === p.value ? 'is-active' : ''
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {PRESETS.map((p) => {
+                  const presetActive = (!custom || !customText.trim()) && persona === p.value;
+                  return (
+                    <button
+                      type="button"
+                      key={p.label}
+                      title={p.value}
+                      onClick={() => {
+                        setPersona(p.value);
+                        setCustom(false);
+                      }}
+                      aria-pressed={presetActive}
+                      className={`term-btn grow whitespace-nowrap rounded-sm px-3 py-1.5 text-center text-xs ${presetActive ? 'is-active' : ''}`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setCustom((c) => !c)}
+                  aria-pressed={custom}
+                  title="describe your own character"
+                  className={`term-btn grow whitespace-nowrap rounded-sm px-3 py-1.5 text-center text-xs ${custom ? 'is-active' : ''}`}
+                >
+                  ✎ custom
+                </button>
               </div>
+
+              {/* live description of the active character — works without hover (mobile-safe) */}
+              {custom ? (
+                <textarea
+                  value={customText}
+                  onChange={(e) => setCustomText(e.target.value)}
+                  maxLength={280}
+                  autoFocus
+                  placeholder="describe your character in a sentence or two…"
+                  className="term-input mt-2 w-full min-h-16 border border-[var(--phosphor-deep)] rounded-sm p-2 text-sm"
+                />
+              ) : (
+                <p className="mt-2 text-xs text-[var(--phosphor-dim)]">
+                  <span className="text-[var(--phosphor-deep)]">› </span>
+                  {PRESETS.find((p) => p.value === persona)?.value}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -146,10 +190,11 @@ export default function Home() {
                   setGenning(true);
                   setGenError(undefined);
                   try {
+                    const activePersona = custom && customText.trim() ? customText.trim() : persona;
                     const res = await fetch('/api/avatar', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ personality: persona }),
+                      body: JSON.stringify({ personality: activePersona }),
                     });
                     const j = await res.json().catch(() => ({}));
                     if (!res.ok || !j.rootHash) throw new Error(j.error || `generation failed (${res.status})`);

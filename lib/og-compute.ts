@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
-import type { PromptMessage } from './agent-core';
+import type { PromptMessage, AgentState } from './agent-core';
+import { parseDistill, type Distilled } from './distill';
 
 const BASE_URL =
   process.env.ROUTER_BASE_URL || 'https://router-api-testnet.integratenetwork.work/v1';
@@ -33,4 +34,22 @@ export async function chatStream(messages: PromptMessage[]): Promise<AsyncIterab
     }
   }
   return gen();
+}
+
+/** Ask 0G Compute to distill what the companion should remember about the USER. */
+export async function distillMemory(state: AgentState): Promise<Distilled> {
+  const convo = state.history.map((m) => `${m.role}: ${m.content}`).join('\n');
+  const messages: PromptMessage[] = [
+    {
+      role: 'system',
+      content:
+        `You maintain the long-term memory of an AI companion named ${state.name}. ` +
+        `From the conversation, extract what the companion should remember about the USER (not about itself). ` +
+        `Reply with ONLY minified JSON, no prose: ` +
+        `{"summary":"2-3 sentence summary of the user and the relationship","facts":["short fact about the user"]} ` +
+        `with at most 6 facts.`,
+    },
+    { role: 'user', content: convo || '(no conversation yet)' },
+  ];
+  return parseDistill(await chat(messages)); // reuses chat()'s model + ROUTER_API_KEY guards
 }

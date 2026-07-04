@@ -48,6 +48,28 @@ async function errorText(res: Response): Promise<string> {
   }
 }
 
+/** Ask the server (0G Compute) to distill memory summary + key facts from the conversation.
+ *  Returns null on any failure so the save flow can proceed without enrichment. */
+export async function distill(
+  state: AgentState,
+): Promise<{ memorySummary: string; keyFacts: string[] } | null> {
+  try {
+    const res = await fetch('/api/distill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state }),
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (typeof j.memorySummary === 'string' && Array.isArray(j.keyFacts)) {
+      return { memorySummary: j.memorySummary, keyFacts: j.keyFacts };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /** Upload the agent state to 0G Storage and return its root hash. Throws on failure. */
 export async function saveMemory(state: AgentState): Promise<string> {
   const res = await fetch('/api/memory', {

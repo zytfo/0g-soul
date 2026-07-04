@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAccount, usePublicClient, useSwitchChain } from 'wagmi';
 import { appendTurn, boundHistory, type AgentState } from '@/lib/agent-core';
-import { sendChatStream, saveMemory, rememberSoul, forgetSoul, avatarUrl } from '@/lib/soul-client';
+import { sendChatStream, saveMemory, distill, rememberSoul, forgetSoul, avatarUrl } from '@/lib/soul-client';
 import { useMintAgent, useSetMemory, useOwnerOf, tokenIdFromReceipt, useTransfer } from '@/lib/contract';
 import { galileo } from '@/lib/chain';
 import { MemoryPanel } from '@/components/MemoryPanel';
+import { ShareButton } from '@/components/ShareButton';
+import { sttSupported, ttsSupported, startDictation, speak, cancelSpeak } from '@/lib/voice';
 
 type Entry = {
   id: number;
@@ -44,6 +46,11 @@ export function ChatConsole({
   const [offline, setOffline] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
   const [memoryRootHash, setMemoryRootHash] = useState<string>();
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [listening, setListening] = useState(false);
+  const stopRef = useRef<() => void>(() => {});
+  const [canStt, setCanStt] = useState(false);
+  const [canTts, setCanTts] = useState(false);
 
   const { address, isConnected, chainId } = useAccount();
   const publicClient = usePublicClient();
@@ -59,6 +66,11 @@ export function ChatConsole({
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
   }, [feed, working]);
+
+  // Feature-detect voice APIs on mount (client-only, SSR-safe)
+  useEffect(() => { setCanStt(sttSupported()); setCanTts(ttsSupported()); }, []);
+  // Cancel any in-progress speech + dictation on unmount
+  useEffect(() => () => { cancelSpeak(); stopRef.current(); }, []);
 
   // compute the id OUTSIDE the updater — calling eid() inside setFeed makes it
   // run twice under React Strict Mode and produced duplicate keys.
@@ -86,6 +98,7 @@ export function ChatConsole({
     // partial stream or fallback so display always matches committed state)
     setFeed((f) => f.map((m) => (m.id === aiId ? { ...m, text } : m)));
     setOffline(fallback);
+    if (voiceOn && !fallback) speak(text);
     setState((s) => boundHistory(appendTurn(s, msg, text)).state);
     setWorking(null);
     setBusy(false);
@@ -102,8 +115,11 @@ export function ChatConsole({
     setBusy(true);
     try {
       await ensureGalileo();
+      setWorking('distilling memory (0G Compute)…');
+      const toSave = await withDistilledMemory(state);
+      if (toSave !== state) setState(toSave);
       setWorking('writing memory → 0G Storage');
-      const rootHash = await saveMemory(state);
+      const rootHash = await saveMemory(toSave);
       setMemoryRootHash(rootHash);
       push({ role: 'sys', text: `memory → 0G Storage ✓  root ${short(rootHash)}` });
       setWorking('minting INFT on 0G Chain — confirm in wallet');
@@ -134,8 +150,11 @@ export function ChatConsole({
     setBusy(true);
     try {
       await ensureGalileo();
+      setWorking('distilling memory (0G Compute)…');
+      const toSave = await withDistilledMemory(state);
+      if (toSave !== state) setState(toSave);
       setWorking('saving new memory → 0G Storage');
-      const rootHash = await saveMemory(state);
+      const rootHash = await saveMemory(toSave);
       setMemoryRootHash(rootHash);
       push({ role: 'sys', text: `memory → 0G Storage ✓  root ${short(rootHash)}` });
       setWorking('updating on-chain pointer — confirm in wallet');
@@ -213,6 +232,18 @@ export function ChatConsole({
       {/* input */}
       <form onSubmit={onSend} className="mt-3 flex items-center gap-2 border-t border-[var(--phosphor-deep)] pt-3">
         <span className="glow shrink-0">{'>'}</span>
+        {canStt && (
+          <button type="button" onClick={() => {
+            if (listening) { stopRef.current(); setListening(false); return; }
+            setListening(true);
+            stopRef.current = startDictation(
+              (t) => setInput((v) => (v ? v + ' ' : '') + t),
+              () => setListening(false), // clears the indicator on result, silence, or error
+            );
+          }} className={`term-btn rounded-sm px-2 py-1 text-xs ${listening ? 'is-active' : ''}`} aria-label="dictate">
+            {listening ? '● rec' : '🎙'}
+          </button>
+        )}
         <input
           className="term-input flex-1"
           value={input}
@@ -222,6 +253,14 @@ export function ChatConsole({
           disabled={busy}
           autoFocus
         />
+        <button
+          type="submit"
+          disabled={busy || !input.trim()}
+          className="term-btn shrink-0 rounded-sm px-3 py-1 text-xs"
+          aria-label="send message"
+        >
+          send ↵
+        </button>
       </form>
 
       {/* actions */}
@@ -276,6 +315,13 @@ export function ChatConsole({
                 : 'connect the owner wallet to teach it new memories'}
             </span>
           </>
+        )}
+        {tokenId !== undefined && <ShareButton tokenId={tokenId} name={state.name} />}
+        {canTts && (
+          <button type="button" onClick={() => { setVoiceOn((v) => { if (v) cancelSpeak(); return !v; }); }}
+            className={`term-btn rounded-sm px-2 py-1 text-xs ${voiceOn ? 'is-active' : ''}`}>
+            🔊 {voiceOn ? 'on' : 'off'}
+          </button>
         )}
       </div>
     </div>
@@ -338,6 +384,15 @@ async function pollReceipt(client: PClient, hash: `0x${string}`, timeoutMs = 120
     await new Promise((res) => setTimeout(res, intervalMs));
   }
   throw new Error('not confirmed in 120s — check the explorer link above; the tx likely succeeded');
+}
+
+/** Enrich state with distilled memory (summary + facts) before saving; on failure, save as-is. */
+async function withDistilledMemory(state: AgentState): Promise<AgentState> {
+  const d = await distill(state);
+  // only enrich when the distill produced something — never erase prior summary/facts with an empty result
+  return d && (d.memorySummary || d.keyFacts.length)
+    ? { ...state, memorySummary: d.memorySummary, keyFacts: d.keyFacts }
+    : state;
 }
 
 const short = (s: string) => (s.length > 14 ? `${s.slice(0, 8)}…${s.slice(-4)}` : s);

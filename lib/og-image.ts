@@ -10,7 +10,8 @@ export function avatarPrompt(personality: string): string {
   else if (p.includes('gremlin') || p.includes('chaotic')) color = 'hot magenta with glitch sparks';
   else if (p.includes('poet') || p.includes('dreamy')) color = 'soft violet';
   else if (p.includes('warm') || p.includes('witty')) color = 'warm amber-gold';
-  return `recolor this into a ${color} glowing soul orb. Keep the CRT pixel style, scanlines, the diamond motifs, and a dark background. Centered, iconic, 512x512.`;
+  const clip = personality.length > 160 ? personality.slice(0, 160) : personality;
+  return `recolor this into a ${color} glowing soul orb whose color and mood reflect this character: "${clip}". Keep the CRT pixel style, scanlines, the diamond motifs, and a dark background. Centered, iconic, 512x512.`;
 }
 
 export async function generateAvatar(personality: string): Promise<Uint8Array> {
