@@ -207,7 +207,19 @@ export function ChatConsole({
       const K = await unsealKey(new Uint8Array(hexToBytes(sealedHex)), wrap);
       const cipher = await downloadBlob(encURI);
       const priv = await decryptJSON<{ memorySummary: string; keyFacts: string[]; history: ChatMessage[] }>(new Uint8Array(cipher) as Uint8Array<ArrayBuffer>, K);
-      setState((s) => ({ ...s, memorySummary: priv.memorySummary, keyFacts: priv.keyFacts }));
+      const past = Array.isArray(priv.history) ? priv.history : [];
+      // restore the full private memory: summary + facts into the panel, and the saved
+      // transcript back into the conversation (prepended before any turns from this session).
+      setState((s) => ({ ...s, memorySummary: priv.memorySummary, keyFacts: priv.keyFacts, history: [...past, ...s.history] }));
+      if (past.length) {
+        const restored: Entry[] = past.map((m) => ({
+          id: eid(),
+          role: m.role === 'assistant' ? ('ai' as const) : ('user' as const),
+          text: m.content,
+        }));
+        setFeed((f) => [...restored, ...f]);
+        push({ role: 'sys', tone: 'amber', text: `✦ memory unlocked — restored ${past.length} past message${past.length === 1 ? '' : 's'}` });
+      }
       setUnlocked(true);
     } catch (e) {
       push({ role: 'sys', tone: 'magenta', text: `! could not unlock (${errMsg(e)})` });
