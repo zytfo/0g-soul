@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Terminal } from '@/components/Terminal';
 import { ChatConsole } from '@/components/ChatConsole';
-import { useMemoryOf } from '@/lib/contract';
-import { loadMemory } from '@/lib/soul-client';
+import { usePublicURIOf } from '@/lib/contract';
+import { fetchSoulProfile } from '@/lib/soul-client';
+import { mergeProfile } from '@/lib/agent-core';
 import type { AgentState } from '@/lib/agent-core';
 
 export function AgentLoader({ tokenId }: { tokenId: string }) {
@@ -16,20 +17,26 @@ export function AgentLoader({ tokenId }: { tokenId: string }) {
     tid = undefined;
   }
 
-  const { data: rootHash, isLoading, error } = useMemoryOf(tid);
+  const { data: publicURI, isLoading, error } = usePublicURIOf(tid);
   const [state, setState] = useState<AgentState | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof rootHash !== 'string' || rootHash === '') return;
+    if (tid === undefined) return;
     let cancelled = false;
-    loadMemory(rootHash)
-      .then((s) => !cancelled && setState(s))
+    // Load public profile via server route (which calls loadSoulProfile → publicURIOf → downloadBytes)
+    fetchSoulProfile(tokenId)
+      .then((profile) => {
+        if (cancelled) return;
+        if (!profile) { setLoadErr('soul not found'); return; }
+        setState(mergeProfile(
+          { version: 1, name: profile.name, personality: profile.personality, avatarRootHash: profile.avatarRootHash },
+          null,
+        ));
+      })
       .catch((e) => !cancelled && setLoadErr(e instanceof Error ? e.message : 'load failed'));
-    return () => {
-      cancelled = true;
-    };
-  }, [rootHash]);
+    return () => { cancelled = true; };
+  }, [tokenId, tid]);
 
   return (
     <Terminal path={`~/soul/${tokenId}`}>
@@ -40,13 +47,13 @@ export function AgentLoader({ tokenId }: { tokenId: string }) {
       ) : (
         <div className="space-y-2">
           <Sys text={`resolving Soul #${tokenId} on 0G Chain …`} />
-          {isLoading && <Sys text="reading memory pointer (memoryOf) …" />}
+          {isLoading && <Sys text="reading public profile (publicURIOf) …" />}
           {error && <Sys text="! could not read contract — is your wallet on Galileo?" tone="magenta" />}
-          {typeof rootHash === 'string' && rootHash === '' && (
-            <Sys text={`! no memory found for Soul #${tokenId}`} tone="magenta" />
+          {typeof publicURI === 'string' && publicURI === '' && (
+            <Sys text={`! no public profile found for Soul #${tokenId}`} tone="magenta" />
           )}
-          {typeof rootHash === 'string' && rootHash !== '' && !loadErr && (
-            <Sys text={`fetching memory from 0G Storage … root ${rootHash.slice(0, 10)}…`} />
+          {typeof publicURI === 'string' && publicURI !== '' && !loadErr && (
+            <Sys text={`fetching public profile from 0G Storage … root ${publicURI.slice(0, 10)}…`} />
           )}
           {loadErr && <Sys text={`! ${loadErr}`} tone="magenta" />}
           <p className="pt-4 text-sm">

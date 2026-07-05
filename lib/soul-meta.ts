@@ -1,6 +1,6 @@
 import { createPublicClient, http } from 'viem';
 import { galileo, CONTRACT_ADDRESS, SOUL_ABI } from './chain';
-import { downloadMemory } from './og-storage';
+import { downloadBytes } from './og-storage';
 import type { AgentState } from './agent-core';
 import type { SoulProfile } from './soul-types';
 
@@ -15,51 +15,54 @@ export function composeSoulMeta(tokenId: bigint, rootHash: string, state: AgentS
 
 export async function loadSoulMeta(tokenId: bigint): Promise<SoulMeta> {
   const client = createPublicClient({ chain: galileo, transport: http() });
-  let rootHash = '';
+  // existence check
   try {
-    rootHash = (await client.readContract({
-      address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'memoryOf', args: [tokenId],
-    })) as string;
+    await client.readContract({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'ownerOf', args: [tokenId] });
   } catch {
     return composeSoulMeta(tokenId, '', null);
   }
-  let state: AgentState | null = null;
-  if (rootHash) {
-    try { state = await downloadMemory(rootHash); } catch { state = null; }
+  let publicURI = '';
+  try {
+    publicURI = (await client.readContract({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'publicURIOf', args: [tokenId] })) as string;
+  } catch {
+    return composeSoulMeta(tokenId, '', null);
   }
-  return composeSoulMeta(tokenId, rootHash, state);
+  if (!publicURI) return composeSoulMeta(tokenId, '', null);
+  try {
+    const bytes = await downloadBytes(publicURI);
+    const p = JSON.parse(new TextDecoder().decode(bytes)) as { name?: string; personality?: string; avatarRootHash?: string };
+    // Build a minimal AgentState shape for composeSoulMeta
+    const state: AgentState = {
+      version: 1,
+      name: p.name || `Soul #${tokenId}`,
+      personality: p.personality || '',
+      memorySummary: '',
+      keyFacts: [],
+      history: [],
+      avatarRootHash: p.avatarRootHash,
+    };
+    return composeSoulMeta(tokenId, publicURI, state);
+  } catch {
+    return composeSoulMeta(tokenId, '', null);
+  }
 }
 
 export async function loadSoulProfile(tokenId: bigint): Promise<SoulProfile | null> {
   const client = createPublicClient({ chain: galileo, transport: http() });
-  // existence check: ownerOf reverts (ERC721NonexistentToken) for tokens that were never minted,
-  // so a non-existent id (e.g. 100, 1000) returns null instead of a phantom "Soul #100"
   try {
     await client.readContract({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'ownerOf', args: [tokenId] });
   } catch {
     return null;
   }
-  let rootHash = '';
-  try {
-    rootHash = (await client.readContract({
-      address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'memoryOf', args: [tokenId],
-    })) as string;
-  } catch {
-    return null;
-  }
   const base: SoulProfile = { tokenId: tokenId.toString(), name: `Soul #${tokenId}`, personality: '', memorySummary: '', keyFacts: [] };
-  if (!rootHash) return base;
+  let publicURI = '';
   try {
-    const s = await downloadMemory(rootHash);
-    return {
-      tokenId: tokenId.toString(),
-      name: s.name || base.name,
-      personality: s.personality || '',
-      memorySummary: s.memorySummary || '',
-      keyFacts: Array.isArray(s.keyFacts) ? s.keyFacts : [],
-      avatarRootHash: s.avatarRootHash,
-    };
-  } catch {
-    return base;
-  }
+    publicURI = (await client.readContract({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'publicURIOf', args: [tokenId] })) as string;
+  } catch { return base; }
+  if (!publicURI) return base;
+  try {
+    const bytes = await downloadBytes(publicURI);
+    const p = JSON.parse(new TextDecoder().decode(bytes)) as { name?: string; personality?: string; avatarRootHash?: string };
+    return { tokenId: tokenId.toString(), name: p.name || base.name, personality: p.personality || '', memorySummary: '', keyFacts: [], avatarRootHash: p.avatarRootHash };
+  } catch { return base; }
 }

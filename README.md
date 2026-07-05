@@ -1,9 +1,11 @@
 # ◈ Soul - an AI you actually own
 
-> Create an AI companion, chat with it, and **mint it as an NFT on the 0G chain**.
-> Its memory doesn't live on our server - it lives in **decentralized 0G Storage**.
-> Close the tab, switch devices, hand it to a friend: it still remembers you,
-> because its brain lives on-chain.
+> Create an AI companion, chat with it, and **mint it as an ERC-7857 INFT on the 0G chain**.
+> Its memory doesn't live on our server - it lives in **decentralized 0G Storage**, and the
+> private part is **AES-encrypted so only you can decrypt it**.
+> Close the tab or switch devices: sign once and it still remembers you, because its brain
+> lives on-chain. Hand the NFT to a friend and they inherit the character - but your private
+> memory stays encrypted to you.
 
 **▶ Live demo: [0g-soul.vercel.app](https://0g-soul.vercel.app)**
 
@@ -45,16 +47,23 @@ Built for **[The Zero Cup - 0G's Global Vibe Coding Tournament](https://0g.ai/ar
 
 1. **Create** a companion - give it a name and a personality.
 2. **Chat** with it. Every reply is generated through **0G Compute** (decentralized GPUs).
-3. **Save & Mint.** Its full state (personality + memory) is written to **0G Storage**,
-   and the companion is **minted as an ERC-721** on the 0G chain - the token points
-   at the memory's storage root hash.
+3. **Save & Mint.** Its **public profile** (name + personality + avatar) is written to
+   **0G Storage** as plaintext, while its **private memory** (summary, key facts, chat
+   history) is **AES-256-GCM encrypted in your browser** before upload - then the companion
+   is **minted as an ERC-7857 INFT** on the 0G chain. The token stores the public-profile
+   pointer, the encrypted-memory pointer, and the memory key **sealed to your wallet**.
 4. **Reload.** Open the shareable link `/agent/<tokenId>` from *any* browser or wallet.
-   The app reads the on-chain memory pointer and pulls the memory back from 0G Storage -
-   **it remembers you**. Nothing was stored on our server.
+   Anyone can read the **public profile** and chat with the character. The owner clicks
+   **unlock**, signs once, and the private memory decrypts **client-side** - **it remembers
+   you**. Nothing readable was stored on our server; the server only ever saw ciphertext.
 
-> **Ownership & access:** anyone with the link can view and chat with a Soul (a public
-> "preview"), but **only the token holder can save new memories on-chain** - enforced by
-> `setMemory`'s `ownerOf` check. Transfer the NFT and that right moves with it.
+> **Private memory (ERC-7857 privacy):** a per-Soul AES key encrypts the memory; that key is
+> sealed to the owner via a wallet signature (`HKDF(personal_sign("SOUL:unlock:v1"))`), so
+> **only the token holder can decrypt** - the plaintext and the key never leave the browser.
+> Anyone with the link gets a public "preview" chat off the public profile; only the owner
+> can save new (encrypted) memories on-chain, enforced by `setMemory`'s `ownerOf` check.
+> **On transfer** the character carries over but the private memory does **not** - your
+> intimate conversations stay encrypted to you, not handed to the new owner.
 
 This is 0G's whole thesis - *ownable, persistent, decentralized AI* - in one demo.
 
@@ -67,11 +76,12 @@ Soul is genuinely 0G-native, not an API wrapper. All three layers do real work:
 | 0G layer | What it does in Soul | Where in the code |
 |----------|----------------------|-------------------|
 | **0G Compute** | Two models: streaming chat replies (`qwen2.5-omni`) **and** avatar generation (`qwen-image-edit`), both OpenAI-compatible via the Compute Router. | [`lib/og-compute.ts`](lib/og-compute.ts), [`lib/og-image.ts`](lib/og-image.ts), [`app/api/chat/route.ts`](app/api/chat/route.ts), [`app/api/avatar/route.ts`](app/api/avatar/route.ts) |
-| **0G Storage** | Both the agent's **memory** (JSON blob: personality, summary, key facts, history, avatar pointer) and its **avatar PNG** are uploaded and fetched by **root hash** - no centralized DB. | [`lib/og-storage.ts`](lib/og-storage.ts), [`app/api/memory/route.ts`](app/api/memory/route.ts) |
-| **0G Chain** | The companion is an **ERC-721** with a `tokenURI` (so it renders as a real NFT in wallets/explorers); each token stores a `tokenId → memoryRootHash` pointer only the owner can update, and is **transferable**. | [`contracts/SoulAgentV2.sol`](contracts/SoulAgentV2.sol), [`app/api/nft/[id]/route.ts`](app/api/nft/[id]/route.ts), [`lib/contract.ts`](lib/contract.ts), [`lib/chain.ts`](lib/chain.ts) |
+| **0G Storage** | The **public profile** (plaintext JSON: name, personality, avatar pointer), the **encrypted private memory** (AES-GCM ciphertext), and the **avatar PNG** are all uploaded and fetched by **root hash** - no centralized DB. The private plaintext is encrypted client-side, so the server only ever handles ciphertext. | [`lib/og-storage.ts`](lib/og-storage.ts), [`app/api/blob/route.ts`](app/api/blob/route.ts), [`lib/crypto.ts`](lib/crypto.ts) |
+| **0G Chain** | The companion is an **ERC-7857 INFT** (`SoulINFT`) - ERC-721 plus per-token `publicURI`, `encryptedURI`, `metadataHash`, and a `sealedKey`, with an oracle-verified `transfer(from,to,id,sealedKey,proof)`. Only the owner can `setMemory` / `setPublicProfile`; on transfer the private memory is cleared so it stays encrypted to the sender. A `MockOracle` stands in for 0G's TEE/ZKP oracle on testnet. | [`contracts/SoulINFT.sol`](contracts/SoulINFT.sol), [`contracts/MockOracle.sol`](contracts/MockOracle.sol), [`app/api/nft/[id]/route.ts`](app/api/nft/[id]/route.ts), [`lib/contract.ts`](lib/contract.ts), [`lib/chain.ts`](lib/chain.ts) |
 
-**Deployed contract (0G Galileo testnet, chain `16602`):**
-[`0x04188499fe778A30c611baF6c7331b0d4Bbf7ED0`](https://chainscan-galileo.0g.ai/address/0x04188499fe778A30c611baF6c7331b0d4Bbf7ED0)
+**Deployed contracts (0G Galileo testnet, chain `16602`):**
+- `SoulINFT` (ERC-7857): [`0x956C346365e0D538cA5c6DB071B7a83F9c57E656`](https://chainscan-galileo.0g.ai/address/0x956C346365e0D538cA5c6DB071B7a83F9c57E656)
+- `MockOracle`: [`0xe76b9C55c78A2eDb80f7C9248D487Ada9Ce22D4e`](https://chainscan-galileo.0g.ai/address/0xe76b9C55c78A2eDb80f7C9248D487Ada9Ce22D4e)
 
 ### Two-wallet model (so judges don't mistake it for centralized)
 - A **server wallet** pays the gas to write memory blobs to 0G Storage (a server-side
@@ -87,8 +97,9 @@ never holds the companion.
 
 ```
 Browser ──► /api/chat   ──► 0G Compute Router      (inference)
-        ──► /api/memory ──► 0G Storage (MemData)    (memory blob → rootHash)
-        ──► wagmi/viem  ──► SoulAgent ERC-721       (mint, setMemory, memoryOf)
+        ──► crypto.ts (Web Crypto, client-side)     (AES-GCM encrypt private memory)
+        ──► /api/blob   ──► 0G Storage (MemData)    (public profile + ciphertext → rootHash)
+        ──► wagmi/viem  ──► SoulINFT ERC-7857        (mint, setMemory, transfer, unlock)
 
 agent-core (pure, tested) builds the system prompt + bounds memory history.
 A local fallback keeps the chat demo alive even if the testnet is flaky.
@@ -142,11 +153,17 @@ node --env-file=.env.local scripts/smoke-storage.mjs   # verify 0G Storage round
 ## The contract
 
 ```solidity
-function mint(string rootHash) external returns (uint256 tokenId); // → AgentMinted
-function setMemory(uint256 tokenId, string rootHash) external;     // require(ownerOf == sender)
-function memoryOf(uint256 tokenId) external view returns (string);
-function tokenURI(uint256 tokenId) external view returns (string); // → /api/nft/<id> metadata
-// standard ERC-721 safeTransferFrom moves the NFT (and memory-write rights) to a new owner
+// SoulINFT — ERC-7857 INFT (ERC-721 + private, oracle-verified metadata)
+function mint(address to, string publicURI, string encryptedURI, bytes32 metadataHash, bytes sealedKey)
+  external returns (uint256 tokenId);                              // → AgentMinted
+function setMemory(uint256 tokenId, string encryptedURI, bytes32 metadataHash, bytes sealedKey) external; // owner-only
+function setPublicProfile(uint256 tokenId, string publicURI) external;                                     // owner-only
+function transfer(address from, address to, uint256 tokenId, bytes sealedKey, bytes proof) external;
+  // require(oracle.verifyProof(proof)); clears encryptedURI/metadataHash → new owner starts a fresh private memory
+function publicURIOf(uint256 tokenId) external view returns (string);   // public: read by anyone
+function encryptedURIOf(uint256 tokenId) external view returns (string); // ciphertext pointer
+function sealedKeyOf(uint256 tokenId) external view returns (bytes);      // AES key sealed to the owner
+function tokenURI(uint256 tokenId) external view returns (string);       // → /api/nft/<id> metadata
 ```
 
 Minimal by design: the token carries a pointer to its memory on 0G Storage, only the

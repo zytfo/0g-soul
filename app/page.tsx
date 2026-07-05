@@ -20,7 +20,7 @@ const PRESETS = [
 ];
 
 const BOOT = [
-  'booting soul kernel v0.3 …',
+  'booting soul kernel v0.4 …',
   'mounting 0G Storage … ok',
   'linking 0G Compute router … ok',
   'attaching 0G Chain (galileo:16602) … ok',

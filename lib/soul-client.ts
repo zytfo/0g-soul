@@ -75,16 +75,6 @@ export async function sendChatStream(
   }
 }
 
-/** Best-effort error message from a non-ok response (JSON .error, else statusText). */
-async function errorText(res: Response): Promise<string> {
-  try {
-    const body = await res.json();
-    return body?.error ?? res.statusText;
-  } catch {
-    return res.statusText || `HTTP ${res.status}`;
-  }
-}
-
 /** Ask the server (0G Compute) to distill memory summary + key facts from the conversation.
  *  Returns null on any failure so the save flow can proceed without enrichment. */
 export async function distill(
@@ -107,32 +97,19 @@ export async function distill(
   }
 }
 
-/** Upload the agent state to 0G Storage and return its root hash. Throws on failure. */
-export async function saveMemory(state: AgentState): Promise<string> {
-  const res = await fetch('/api/memory', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ state }),
-  });
-  if (!res.ok) throw new Error(await errorText(res));
-  const { rootHash } = await res.json();
-  cacheState(rootHash, state);
-  return rootHash;
+/** Upload raw bytes to 0G Storage via /api/blob; returns rootHash. */
+export async function uploadBlob(bytes: Uint8Array): Promise<string> {
+  const buf: ArrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const res = await fetch('/api/blob', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: buf });
+  if (!res.ok) throw new Error('blob upload failed');
+  return (await res.json()).rootHash as string;
 }
 
-/** Download an agent state from 0G Storage by root hash, falling back to local cache. */
-export async function loadMemory(rootHash: string): Promise<AgentState> {
-  try {
-    const res = await fetch(`/api/memory?rootHash=${rootHash}`);
-    if (!res.ok) throw new Error('download failed');
-    const state = (await res.json()) as AgentState;
-    cacheState(rootHash, state);
-    return state;
-  } catch (e) {
-    const cached = readCache(rootHash);
-    if (cached) return cached;
-    throw e;
-  }
+/** Download raw bytes from 0G Storage via /api/blob by rootHash. */
+export async function downloadBlob(rootHash: string): Promise<Uint8Array> {
+  const res = await fetch(`/api/blob?rootHash=${rootHash}`);
+  if (!res.ok) throw new Error('blob download failed');
+  return new Uint8Array(await res.arrayBuffer());
 }
 
 /* --- local registry of souls this wallet has minted (per address) --- */
@@ -163,19 +140,3 @@ export function listSouls(addr: string): SoulRef[] {
   }
 }
 
-const KEY = (rootHash: string) => `soul:mem:${rootHash}`;
-
-export function cacheState(rootHash: string, state: AgentState) {
-  try {
-    localStorage.setItem(KEY(rootHash), JSON.stringify(state));
-  } catch {}
-}
-
-export function readCache(rootHash: string): AgentState | null {
-  try {
-    const raw = localStorage.getItem(KEY(rootHash));
-    return raw ? (JSON.parse(raw) as AgentState) : null;
-  } catch {
-    return null;
-  }
-}

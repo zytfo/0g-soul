@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.4 - ERC-7857 INFT + private memory
+
+### Changed
+- Upgraded the companion from ERC-721 to an **ERC-7857 INFT** (`SoulINFT` + a testnet
+  `MockOracle`), per judge feedback - the standard 0G provides for intelligent NFTs.
+- Split each Soul into a **public profile** (name, personality, avatar - plaintext, read by
+  the gallery, séance, preview chat, and share cards) and a **private memory** (summary, key
+  facts, history).
+- The private memory is now **AES-256-GCM encrypted in the browser** before it touches 0G
+  Storage; the per-Soul key is sealed to the owner's wallet via a signature
+  (`HKDF(personal_sign("SOUL:unlock:v1"))`). Only the owner can decrypt it, client-side -
+  the server only ever handles ciphertext.
+
+### Added
+- **Unlock** on `/agent/<id>`: the owner signs once and their private memory decrypts locally
+  and fills the memory panel; non-owners see it as locked.
+- **ERC-7857 transfer**: the public character carries over to the new owner, but the private
+  memory does not - your past conversations stay encrypted to you (a privacy feature, framed
+  honestly given no TEE re-encryption on testnet yet).
+
 ## v0.3 - Round of 16
 
 ### Added

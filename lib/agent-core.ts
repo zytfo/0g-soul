@@ -1,4 +1,4 @@
-import type { SoulProfile, SeanceLine } from './soul-types';
+import type { SoulProfile, SeanceLine, PublicProfile, PrivateMemory } from './soul-types';
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 export type AgentState = {
@@ -11,6 +11,25 @@ export type AgentState = {
   avatarRootHash?: string;
 };
 export type PromptMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+
+export function toPublicProfile(s: AgentState): PublicProfile {
+  return { version: 1, name: s.name, personality: s.personality, avatarRootHash: s.avatarRootHash };
+}
+export function toPrivateMemory(s: AgentState): PrivateMemory {
+  // copy arrays so callers can't mutate the source AgentState through the returned memory
+  return { memorySummary: s.memorySummary, keyFacts: [...s.keyFacts], history: [...s.history] };
+}
+export function mergeProfile(pub: PublicProfile, priv: PrivateMemory | null): AgentState {
+  return {
+    version: 1,
+    name: pub.name,
+    personality: pub.personality,
+    avatarRootHash: pub.avatarRootHash,
+    memorySummary: priv?.memorySummary ?? '',
+    keyFacts: priv?.keyFacts ?? [],
+    history: priv?.history ?? [],
+  };
+}
 
 export function buildMessages(state: AgentState): PromptMessage[] {
   const system =

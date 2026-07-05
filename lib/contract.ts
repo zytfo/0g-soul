@@ -1,78 +1,55 @@
 'use client';
 
 import { useWriteContract, useReadContract } from 'wagmi';
-import { decodeEventLog } from 'viem';
-import type { TransactionReceipt } from 'viem';
+import { decodeEventLog, keccak256, type TransactionReceipt } from 'viem';
 import { CONTRACT_ADDRESS, SOUL_ABI } from './chain';
 
-/** Mint a new agent pointing at its initial memory root hash. */
-export function useMintAgent() {
-  const { writeContractAsync, isPending } = useWriteContract();
-  const mint = (rootHash: string) =>
-    writeContractAsync({
-      address: CONTRACT_ADDRESS,
-      abi: SOUL_ABI,
-      functionName: 'mint',
-      args: [rootHash],
-    });
-  return { mint, isPending };
+export function useMint() {
+  const { writeContractAsync } = useWriteContract();
+  const mint = (to: `0x${string}`, publicURI: string, encryptedURI: string, metadataHash: `0x${string}`, sealedKey: `0x${string}`) =>
+    writeContractAsync({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'mint', args: [to, publicURI, encryptedURI, metadataHash, sealedKey] });
+  return { mint };
 }
 
-/** Update an existing agent's memory pointer (must be the token owner). */
 export function useSetMemory() {
-  const { writeContractAsync, isPending } = useWriteContract();
-  const setMemory = (tokenId: bigint, rootHash: string) =>
-    writeContractAsync({
-      address: CONTRACT_ADDRESS,
-      abi: SOUL_ABI,
-      functionName: 'setMemory',
-      args: [tokenId, rootHash],
-    });
-  return { setMemory, isPending };
+  const { writeContractAsync } = useWriteContract();
+  const setMemory = (tokenId: bigint, encryptedURI: string, metadataHash: `0x${string}`, sealedKey: `0x${string}`) =>
+    writeContractAsync({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'setMemory', args: [tokenId, encryptedURI, metadataHash, sealedKey] });
+  return { setMemory };
 }
 
-/** Transfer a Soul NFT to another address (must be the current owner). */
+export function useSetPublicProfile() {
+  const { writeContractAsync } = useWriteContract();
+  const setPublicProfile = (tokenId: bigint, publicURI: string) =>
+    writeContractAsync({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'setPublicProfile', args: [tokenId, publicURI] });
+  return { setPublicProfile };
+}
+
 export function useTransfer() {
-  const { writeContractAsync, isPending } = useWriteContract();
-  const transfer = (from: `0x${string}`, to: `0x${string}`, tokenId: bigint) =>
-    writeContractAsync({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'safeTransferFrom', args: [from, to, tokenId] });
-  return { transfer, isPending };
+  const { writeContractAsync } = useWriteContract();
+  const transfer = (from: `0x${string}`, to: `0x${string}`, tokenId: bigint, sealedKey: `0x${string}`, proof: `0x${string}`) =>
+    writeContractAsync({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'transfer', args: [from, to, tokenId, sealedKey, proof] });
+  return { transfer };
 }
 
-/** Read an agent's current memory root hash by tokenId. */
-export function useMemoryOf(tokenId: bigint | undefined) {
-  return useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: SOUL_ABI,
-    functionName: 'memoryOf',
-    args: tokenId !== undefined ? [tokenId] : undefined,
-    query: { enabled: tokenId !== undefined },
-  });
+function useRead(fn: 'publicURIOf' | 'encryptedURIOf' | 'sealedKeyOf' | 'ownerOf', tokenId?: bigint) {
+  return useReadContract({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: fn, args: tokenId !== undefined ? [tokenId] : undefined, query: { enabled: tokenId !== undefined } });
 }
 
-/** Read the on-chain owner of a tokenId (reverts for nonexistent → undefined). */
-export function useOwnerOf(tokenId: bigint | undefined) {
-  return useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: SOUL_ABI,
-    functionName: 'ownerOf',
-    args: tokenId !== undefined ? [tokenId] : undefined,
-    query: { enabled: tokenId !== undefined },
-  });
-}
+export const usePublicURIOf = (t?: bigint) => useRead('publicURIOf', t);
+export const useEncryptedURIOf = (t?: bigint) => useRead('encryptedURIOf', t);
+export const useSealedKeyOf = (t?: bigint) => useRead('sealedKeyOf', t);
+export const useOwnerOf = (t?: bigint) => useRead('ownerOf', t);
 
-/** Pull the new tokenId from an AgentMinted event in a mint tx receipt. */
+export { keccak256 };
+
 export function tokenIdFromReceipt(receipt: TransactionReceipt): bigint | undefined {
   for (const log of receipt.logs) {
     if (log.address.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase()) continue;
     try {
       const parsed = decodeEventLog({ abi: SOUL_ABI, data: log.data, topics: log.topics });
-      if (parsed.eventName === 'AgentMinted') {
-        return (parsed.args as { tokenId: bigint }).tokenId;
-      }
-    } catch {
-      // not our event — skip
-    }
+      if (parsed.eventName === 'AgentMinted') return (parsed.args as { tokenId: bigint }).tokenId;
+    } catch {}
   }
   return undefined;
 }
