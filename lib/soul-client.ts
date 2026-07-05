@@ -1,8 +1,45 @@
 import type { AgentState } from './agent-core';
+import type { SoulProfile, SeanceLine } from './soul-types';
 
 /** Returns the URL for a soul avatar. Falls back to /logo.png when no rootHash is set. */
 export const avatarUrl = (rootHash?: string) =>
   rootHash ? `/api/avatar?rootHash=${rootHash}` : '/logo.png';
+
+export async function fetchSoulProfile(id: string): Promise<SoulProfile | null> {
+  try {
+    const res = await fetch(`/api/soul/${id}`);
+    if (!res.ok) return null;
+    return (await res.json()) as SoulProfile;
+  } catch {
+    return null;
+  }
+}
+
+export async function streamSeanceTurn(
+  speaker: SoulProfile,
+  otherName: string,
+  transcript: SeanceLine[],
+  onToken: (delta: string) => void,
+): Promise<string> {
+  const res = await fetch('/api/seance', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ speaker, otherName, transcript }),
+  });
+  if (!res.ok || !res.body) throw new Error('seance turn failed');
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    if (chunk) { text += chunk; onToken(chunk); }
+  }
+  const tail = decoder.decode(); // flush any buffered multi-byte tail into the live feed too
+  if (tail) { text += tail; onToken(tail); }
+  return text;
+}
 
 /** Stream a chat turn. Falls back to a canned reply if the Compute route fails or returns empty.
  *  On fallback, returns the canned text WITHOUT appending via onToken — the caller reconciles the

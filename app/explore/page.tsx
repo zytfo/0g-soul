@@ -41,6 +41,7 @@ export default function Explore() {
           <div>
             <p className="glow text-lg">// the soul gallery</p>
             <p className="text-[var(--phosphor-deep)] text-xs">every Soul ever minted on 0G — from anyone</p>
+            <Link href="/seance" className="text-xs text-[var(--phosphor-dim)] underline decoration-dotted">⚯ start a séance ›</Link>
           </div>
         </div>
 

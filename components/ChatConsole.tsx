@@ -172,7 +172,7 @@ export function ChatConsole({
   }
 
   return (
-    <div className="flex h-[60vh] flex-col">
+    <div className="flex h-[78vh] flex-col md:h-[60vh]">
       {/* header line */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--phosphor-deep)] pb-2 text-sm">
         <span className="flex items-center gap-3">
@@ -225,8 +225,10 @@ export function ChatConsole({
             </p>
           )}
         </div>
-        {/* memory panel */}
-        <MemoryPanel state={state} tokenId={tokenId} memoryRootHash={memoryRootHash} />
+        {/* memory panel — hidden on mobile so the chat gets full height */}
+        <div className="hidden md:block md:min-h-0">
+          <MemoryPanel state={state} tokenId={tokenId} memoryRootHash={memoryRootHash} />
+        </div>
       </div>
 
       {/* input */}

@@ -1,6 +1,8 @@
 import OpenAI from 'openai';
 import type { PromptMessage, AgentState } from './agent-core';
+import { buildSeanceMessages } from './agent-core';
 import { parseDistill, type Distilled } from './distill';
+import type { SoulProfile, SeanceLine } from './soul-types';
 
 const BASE_URL =
   process.env.ROUTER_BASE_URL || 'https://router-api-testnet.integratenetwork.work/v1';
@@ -34,6 +36,10 @@ export async function chatStream(messages: PromptMessage[]): Promise<AsyncIterab
     }
   }
   return gen();
+}
+
+export function seanceTurn(speaker: SoulProfile, otherName: string, transcript: SeanceLine[]): Promise<AsyncIterable<string>> {
+  return chatStream(buildSeanceMessages(speaker, otherName, transcript));
 }
 
 /** Ask 0G Compute to distill what the companion should remember about the USER. */

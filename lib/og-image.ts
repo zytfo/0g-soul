@@ -3,15 +3,31 @@ import path from 'node:path';
 
 const BASE_URL = process.env.ROUTER_BASE_URL || 'https://router-api-testnet.integratenetwork.work/v1';
 
+const PALETTE = [
+  'emerald green', 'warm amber-gold', 'cool steel-blue', 'soft violet',
+  'hot magenta', 'electric cyan', 'crimson red', 'golden yellow', 'deep teal', 'burnt orange',
+];
+
+function hashIndex(s: string, n: number): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h % n;
+}
+
 export function avatarPrompt(personality: string): string {
   const p = personality.toLowerCase();
-  let color = 'emerald green';
+  let color: string;
   if (p.includes('stoic') || p.includes('calm')) color = 'cool steel-blue';
   else if (p.includes('gremlin') || p.includes('chaotic')) color = 'hot magenta with glitch sparks';
   else if (p.includes('poet') || p.includes('dreamy')) color = 'soft violet';
   else if (p.includes('warm') || p.includes('witty')) color = 'warm amber-gold';
+  else color = PALETTE[hashIndex(p, PALETTE.length)]; // distinct color per custom character
   const clip = personality.length > 160 ? personality.slice(0, 160) : personality;
-  return `recolor this into a ${color} glowing soul orb whose color and mood reflect this character: "${clip}". Keep the CRT pixel style, scanlines, the diamond motifs, and a dark background. Centered, iconic, 512x512.`;
+  return (
+    `Reimagine this glowing soul as a UNIQUE ${color} emblem that embodies this character: "${clip}". ` +
+    `Give it a distinctive silhouette and small symbols that reflect the character — not just a recolor. ` +
+    `Keep the CRT pixel-art style, scanlines, diamond motifs, and dark background. Centered, iconic, 512x512.`
+  );
 }
 
 export async function generateAvatar(personality: string): Promise<Uint8Array> {

@@ -22,6 +22,10 @@ Built for **[The Zero Cup - 0G's Global Vibe Coding Tournament](https://0g.ai/ar
   Soul ever minted on 0G (from anyone), read straight from the contract.
 - 🎙️ **Voice (optional)** - talk to your Soul (browser speech-to-text) and have it
   read replies aloud; hidden where the browser doesn't support it.
+- 👻 **Séance - Soul talks to Soul** - summon any two minted Souls and watch them hold
+  a live, in-character conversation, each driven by its own personality + on-chain
+  memory (0G Compute). Shareable at `/seance/<a>/<b>` with its own OG card. Impossible
+  without persistent, publicly-readable on-chain characters.
 
 ---
 

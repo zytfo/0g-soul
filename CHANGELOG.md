@@ -14,6 +14,9 @@
 - Learned memory - at mint/update, 0G Compute distills a rolling summary and key
   facts about the user from the conversation and stores them in the 0G Storage
   memory blob (the memory panel fills with what the companion has learned).
+- Séance - summon any two minted Souls and watch them hold a live, in-character
+  conversation (each driven by its own personality + on-chain memory via 0G Compute),
+  shareable at `/seance/<a>/<b>` with its own OG card.
 
 ### Changed
 - Personality picker redesigned from a tall grid into compact, wrapping chips with

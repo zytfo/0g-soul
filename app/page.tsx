@@ -24,7 +24,7 @@ const BOOT = [
   'mounting 0G Storage … ok',
   'linking 0G Compute router … ok',
   'attaching 0G Chain (galileo:16602) … ok',
-  'an AI you actually own. its memory lives on-chain.',
+  'memory lives on-chain.',
 ];
 
 export default function Home() {
@@ -83,6 +83,7 @@ export default function Home() {
             <Link href="/explore" className="reveal inline-block text-sm text-[var(--phosphor-dim)] underline decoration-dotted">
               explore the soul gallery ›
             </Link>
+            <Link href="/seance" className="ml-4 inline-block text-sm text-[var(--phosphor-dim)] underline decoration-dotted">⚯ séance ›</Link>
           </div>
 
           {souls.length > 0 && (
@@ -212,6 +213,15 @@ export default function Home() {
                     ? 'regenerate face'
                     : 'generate face (0G image model)'}
               </button>
+              {genning && (
+                <div
+                  className="mt-2 h-1.5 w-full overflow-hidden rounded-sm border border-[var(--phosphor-deep)]"
+                  role="progressbar"
+                  aria-label="rendering avatar on 0G Compute"
+                >
+                  <div className="progress-bar" />
+                </div>
+              )}
               {genError && <p className="text-xs glow-magenta">! {genError}</p>}
               {avatarRootHash && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -223,8 +233,8 @@ export default function Home() {
               )}
             </div>
 
-            <button type="submit" className="term-btn glow rounded-sm px-5 py-2 text-sm">
-              initialize ◈
+            <button type="submit" disabled={genning} className="term-btn glow rounded-sm px-5 py-2 text-sm">
+              {genning ? 'waiting for avatar…' : 'initialize ◈'}
             </button>
           </form>
         </div>
