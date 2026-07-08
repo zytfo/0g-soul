@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.5 - Quarter Finals
+
+### Added
+- **Evolve portrait** - owners regenerate the Soul's avatar on 0G Image from personality +
+  distilled memory, then update the on-chain public profile (`setPublicProfile`).
+- **Dual-network** - Galileo testnet + Aristotle mainnet; network switcher in the titlebar;
+  gallery and APIs are network-aware.
+- **Mainnet deploy** - `SoulINFT` at `0x9BDe8f9a9Aa62BDBc10Cf35abA25B444Ce09761C`
+  ([verified](https://chainscan.0g.ai/address/0x9BDe8f9a9Aa62BDBc10Cf35abA25B444Ce09761C#code));
+  `MockOracle` at `0x2bc3f0AfB556152c11ecAE21549DeD65a5FF3703`
+  ([verified](https://chainscan.0g.ai/address/0x2bc3f0AfB556152c11ecAE21549DeD65a5FF3703#code)).
+- **Verify script** - `scripts/verify-inft-mainnet.mjs`.
+- **Interactive séance** - slow / normal / manual pacing; no auto-run on mount; reading pauses
+  between spirits.
+- **Transfer modal** - in-app transfer UI (replaces browser `prompt()`).
+- **Gallery performance** - viem multicall, 60s server cache, skeleton cards, lazy images.
+
+### Changed
+- Chat input refocuses after send.
+- Storage upload/download routes accept `network` param.
+- Compute Router is network-aware: testnet (`router-api-testnet…`) vs mainnet (`router-api.0g.ai`) with separate API keys.
+
 ## v0.4 - ERC-7857 INFT + private memory
 
 ### Changed

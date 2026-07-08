@@ -1,14 +1,15 @@
-import { defineChain } from 'viem';
-
-/** 0G Galileo testnet (chain ID 16602). Not in wagmi's default chain list. */
-export const galileo = defineChain({
-  id: 16602,
-  name: '0G Galileo Testnet',
-  nativeCurrency: { name: '0G', symbol: '0G', decimals: 18 },
-  rpcUrls: { default: { http: ['https://evmrpc-testnet.0g.ai'] } },
-  blockExplorers: { default: { name: '0G Scan', url: 'https://chainscan-galileo.0g.ai' } },
-  testnet: true,
-});
+/** Re-exports for backward compatibility — prefer `lib/networks.ts` for new code. */
+export {
+  galileo,
+  aristotle,
+  NETWORKS,
+  parseNetwork,
+  networkFromChainId,
+  contractAddress,
+  contractAddressForChain,
+  explorerTx,
+  type NetworkId,
+} from './networks';
 
 export const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
   '0x956C346365e0D538cA5c6DB071B7a83F9c57E656') as `0x${string}`;

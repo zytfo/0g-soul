@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useChainId } from 'wagmi';
 import { Terminal } from '@/components/Terminal';
 import { ChatConsole } from '@/components/ChatConsole';
+import { galleryNetwork } from '@/components/NetworkSwitcher';
 import { usePublicURIOf } from '@/lib/contract';
 import { fetchSoulProfile } from '@/lib/soul-client';
 import { mergeProfile } from '@/lib/agent-core';
@@ -17,6 +19,8 @@ export function AgentLoader({ tokenId }: { tokenId: string }) {
     tid = undefined;
   }
 
+  const chainId = useChainId();
+  const network = galleryNetwork(chainId);
   const { data: publicURI, isLoading, error } = usePublicURIOf(tid);
   const [state, setState] = useState<AgentState | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -25,7 +29,7 @@ export function AgentLoader({ tokenId }: { tokenId: string }) {
     if (tid === undefined) return;
     let cancelled = false;
     // Load public profile via server route (which calls loadSoulProfile → publicURIOf → downloadBytes)
-    fetchSoulProfile(tokenId)
+    fetchSoulProfile(tokenId, network)
       .then((profile) => {
         if (cancelled) return;
         if (!profile) { setLoadErr('soul not found'); return; }
@@ -36,7 +40,7 @@ export function AgentLoader({ tokenId }: { tokenId: string }) {
       })
       .catch((e) => !cancelled && setLoadErr(e instanceof Error ? e.message : 'load failed'));
     return () => { cancelled = true; };
-  }, [tokenId, tid]);
+  }, [tokenId, tid, network]);
 
   return (
     <Terminal path={`~/soul/${tokenId}`}>
@@ -48,7 +52,7 @@ export function AgentLoader({ tokenId }: { tokenId: string }) {
         <div className="space-y-2">
           <Sys text={`resolving Soul #${tokenId} on 0G Chain …`} />
           {isLoading && <Sys text="reading public profile (publicURIOf) …" />}
-          {error && <Sys text="! could not read contract — is your wallet on Galileo?" tone="magenta" />}
+          {error && <Sys text="! could not read contract — switch network in the titlebar" tone="magenta" />}
           {typeof publicURI === 'string' && publicURI === '' && (
             <Sys text={`! no public profile found for Soul #${tokenId}`} tone="magenta" />
           )}

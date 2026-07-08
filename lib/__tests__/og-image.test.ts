@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { avatarPrompt, generateAvatar } from '../og-image';
+import { avatarPrompt, evolveAvatarPrompt, generateAvatar } from '../og-image';
 
 describe('avatarPrompt', () => {
   it('always asks to keep the CRT soul style and 512 framing', () => {
@@ -19,6 +19,20 @@ describe('avatarPrompt', () => {
       avatarPrompt('a dreamy poet'),
     ];
     expect(new Set(prompts).size).toBe(4);
+  });
+});
+
+describe('evolveAvatarPrompt', () => {
+  it('includes personality, summary, and facts', () => {
+    const p = evolveAvatarPrompt({
+      personality: 'warm poet',
+      memorySummary: 'user loves stargazing',
+      keyFacts: ['night owl', 'plays piano'],
+    });
+    expect(p).toContain('warm poet');
+    expect(p).toContain('stargazing');
+    expect(p).toContain('night owl');
+    expect(p.toLowerCase()).toContain('evolve');
   });
 });
 

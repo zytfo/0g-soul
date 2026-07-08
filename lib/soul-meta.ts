@@ -1,5 +1,6 @@
 import { createPublicClient, http } from 'viem';
-import { galileo, CONTRACT_ADDRESS, SOUL_ABI } from './chain';
+import { contractAddress, NETWORKS, type NetworkId } from './networks';
+import { SOUL_ABI } from './chain';
 import { downloadBytes } from './og-storage';
 import type { AgentState } from './agent-core';
 import type { SoulProfile } from './soul-types';
@@ -13,25 +14,28 @@ export function composeSoulMeta(tokenId: bigint, rootHash: string, state: AgentS
   return { name: `Soul #${tokenId}`, personality: '' };
 }
 
-export async function loadSoulMeta(tokenId: bigint): Promise<SoulMeta> {
-  const client = createPublicClient({ chain: galileo, transport: http() });
-  // existence check
+function client(network: NetworkId) {
+  return createPublicClient({ chain: NETWORKS[network].chain, transport: http() });
+}
+
+export async function loadSoulMeta(tokenId: bigint, network: NetworkId = 'testnet'): Promise<SoulMeta> {
+  const viem = client(network);
+  const addr = contractAddress(network);
   try {
-    await client.readContract({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'ownerOf', args: [tokenId] });
+    await viem.readContract({ address: addr, abi: SOUL_ABI, functionName: 'ownerOf', args: [tokenId] });
   } catch {
     return composeSoulMeta(tokenId, '', null);
   }
   let publicURI = '';
   try {
-    publicURI = (await client.readContract({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'publicURIOf', args: [tokenId] })) as string;
+    publicURI = (await viem.readContract({ address: addr, abi: SOUL_ABI, functionName: 'publicURIOf', args: [tokenId] })) as string;
   } catch {
     return composeSoulMeta(tokenId, '', null);
   }
   if (!publicURI) return composeSoulMeta(tokenId, '', null);
   try {
-    const bytes = await downloadBytes(publicURI);
+    const bytes = await downloadBytes(publicURI, network);
     const p = JSON.parse(new TextDecoder().decode(bytes)) as { name?: string; personality?: string; avatarRootHash?: string };
-    // Build a minimal AgentState shape for composeSoulMeta
     const state: AgentState = {
       version: 1,
       name: p.name || `Soul #${tokenId}`,
@@ -47,22 +51,34 @@ export async function loadSoulMeta(tokenId: bigint): Promise<SoulMeta> {
   }
 }
 
-export async function loadSoulProfile(tokenId: bigint): Promise<SoulProfile | null> {
-  const client = createPublicClient({ chain: galileo, transport: http() });
+export async function loadSoulProfile(tokenId: bigint, network: NetworkId = 'testnet'): Promise<SoulProfile | null> {
+  const viem = client(network);
+  const addr = contractAddress(network);
   try {
-    await client.readContract({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'ownerOf', args: [tokenId] });
+    await viem.readContract({ address: addr, abi: SOUL_ABI, functionName: 'ownerOf', args: [tokenId] });
   } catch {
     return null;
   }
   const base: SoulProfile = { tokenId: tokenId.toString(), name: `Soul #${tokenId}`, personality: '', memorySummary: '', keyFacts: [] };
   let publicURI = '';
   try {
-    publicURI = (await client.readContract({ address: CONTRACT_ADDRESS, abi: SOUL_ABI, functionName: 'publicURIOf', args: [tokenId] })) as string;
-  } catch { return base; }
+    publicURI = (await viem.readContract({ address: addr, abi: SOUL_ABI, functionName: 'publicURIOf', args: [tokenId] })) as string;
+  } catch {
+    return base;
+  }
   if (!publicURI) return base;
   try {
-    const bytes = await downloadBytes(publicURI);
+    const bytes = await downloadBytes(publicURI, network);
     const p = JSON.parse(new TextDecoder().decode(bytes)) as { name?: string; personality?: string; avatarRootHash?: string };
-    return { tokenId: tokenId.toString(), name: p.name || base.name, personality: p.personality || '', memorySummary: '', keyFacts: [], avatarRootHash: p.avatarRootHash };
-  } catch { return base; }
+    return {
+      tokenId: tokenId.toString(),
+      name: p.name || base.name,
+      personality: p.personality || '',
+      memorySummary: '',
+      keyFacts: [],
+      avatarRootHash: p.avatarRootHash,
+    };
+  } catch {
+    return base;
+  }
 }
