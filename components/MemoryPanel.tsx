@@ -1,7 +1,6 @@
 'use client';
-import { useChainId } from 'wagmi';
 import type { AgentState } from '@/lib/agent-core';
-import { contractAddressForChain, NETWORKS, networkFromChainId } from '@/lib/networks';
+import { contractAddress, NETWORKS, networkShortLabel, type NetworkId } from '@/lib/networks';
 
 export function MemoryPanel({
   state,
@@ -11,6 +10,7 @@ export function MemoryPanel({
   unlocked,
   onUnlock,
   unlockDisabled,
+  network = 'testnet',
 }: {
   state: AgentState;
   tokenId?: bigint;
@@ -19,15 +19,15 @@ export function MemoryPanel({
   unlocked?: boolean;
   onUnlock?: () => void;
   unlockDisabled?: boolean;
+  network?: NetworkId;
 }) {
-  const chainId = useChainId();
-  const network = networkFromChainId(chainId);
-  const contract = contractAddressForChain(chainId);
+  const contract = contractAddress(network);
   const explorer = NETWORKS[network].explorer;
   return (
     <aside className="terminal rounded-sm p-3 text-xs space-y-2 md:max-h-full md:overflow-y-auto">
       <p className="text-[var(--phosphor-dim)]">{'// memory.state'}</p>
       <Row k="name" v={state.name} />
+      <Row k="network" v={networkShortLabel(network)} />
       <Row k="token" v={tokenId !== undefined ? `#${tokenId}` : 'unminted'} />
       {/* summary and facts are private — gated by owner unlock */}
       {unlocked ? (

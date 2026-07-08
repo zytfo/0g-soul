@@ -2,16 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useChainId } from 'wagmi';
 import { Terminal } from '@/components/Terminal';
 import { ChatConsole } from '@/components/ChatConsole';
-import { galleryNetwork } from '@/components/NetworkSwitcher';
 import { usePublicURIOf } from '@/lib/contract';
 import { fetchSoulProfile } from '@/lib/soul-client';
 import { mergeProfile } from '@/lib/agent-core';
+import { networkShortLabel, type NetworkId } from '@/lib/networks';
 import type { AgentState } from '@/lib/agent-core';
 
-export function AgentLoader({ tokenId }: { tokenId: string }) {
+export function AgentLoader({ tokenId, network }: { tokenId: string; network: NetworkId }) {
   let tid: bigint | undefined;
   try {
     tid = BigInt(tokenId);
@@ -19,42 +18,46 @@ export function AgentLoader({ tokenId }: { tokenId: string }) {
     tid = undefined;
   }
 
-  const chainId = useChainId();
-  const network = galleryNetwork(chainId);
-  const { data: publicURI, isLoading, error } = usePublicURIOf(tid);
+  const { data: publicURI, isLoading, error } = usePublicURIOf(tid, network);
   const [state, setState] = useState<AgentState | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (tid === undefined) return;
     let cancelled = false;
-    // Load public profile via server route (which calls loadSoulProfile → publicURIOf → downloadBytes)
     fetchSoulProfile(tokenId, network)
       .then((profile) => {
         if (cancelled) return;
-        if (!profile) { setLoadErr('soul not found'); return; }
-        setState(mergeProfile(
-          { version: 1, name: profile.name, personality: profile.personality, avatarRootHash: profile.avatarRootHash },
-          null,
-        ));
+        if (!profile) {
+          setLoadErr(`soul not found on ${networkShortLabel(network)}`);
+          return;
+        }
+        setState(
+          mergeProfile(
+            { version: 1, name: profile.name, personality: profile.personality, avatarRootHash: profile.avatarRootHash },
+            null,
+          ),
+        );
       })
       .catch((e) => !cancelled && setLoadErr(e instanceof Error ? e.message : 'load failed'));
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [tokenId, tid, network]);
 
   return (
-    <Terminal path={`~/soul/${tokenId}`}>
+    <Terminal path={`~/${networkShortLabel(network)}/soul/${tokenId}`} hideNetworkSwitcher>
       {tid === undefined ? (
         <Sys text={`! invalid token id "${tokenId}"`} tone="magenta" />
       ) : state ? (
-        <ChatConsole initialState={state} initialTokenId={tid} />
+        <ChatConsole initialState={state} initialTokenId={tid} soulNetwork={network} />
       ) : (
         <div className="space-y-2">
-          <Sys text={`resolving Soul #${tokenId} on 0G Chain …`} />
+          <Sys text={`resolving Soul #${tokenId} on ${networkShortLabel(network)} …`} />
           {isLoading && <Sys text="reading public profile (publicURIOf) …" />}
-          {error && <Sys text="! could not read contract — switch network in the titlebar" tone="magenta" />}
+          {error && <Sys text={`! could not read ${networkShortLabel(network)} contract`} tone="magenta" />}
           {typeof publicURI === 'string' && publicURI === '' && (
-            <Sys text={`! no public profile found for Soul #${tokenId}`} tone="magenta" />
+            <Sys text={`! no public profile for Soul #${tokenId} on ${networkShortLabel(network)}`} tone="magenta" />
           )}
           {typeof publicURI === 'string' && publicURI !== '' && !loadErr && (
             <Sys text={`fetching public profile from 0G Storage … root ${publicURI.slice(0, 10)}…`} />

@@ -2,50 +2,65 @@
 
 import { useWriteContract, useReadContract, useChainId } from 'wagmi';
 import { decodeEventLog, keccak256, type TransactionReceipt } from 'viem';
-import { contractAddressForChain } from './networks';
+import { contractAddress, chainIdForNetwork, networkFromChainId, type NetworkId } from './networks';
 import { SOUL_ABI } from './chain';
 
-export function useMint() {
-  const chainId = useChainId();
-  const address = contractAddressForChain(chainId);
+function resolveNetwork(network?: NetworkId, walletChainId?: number): NetworkId {
+  return network ?? networkFromChainId(walletChainId);
+}
+
+export function useMint(network?: NetworkId) {
+  const walletChainId = useChainId();
+  const resolved = resolveNetwork(network, walletChainId);
+  const address = contractAddress(resolved);
+  const chainId = chainIdForNetwork(resolved);
   const { writeContractAsync } = useWriteContract();
   const mint = (to: `0x${string}`, publicURI: string, encryptedURI: string, metadataHash: `0x${string}`, sealedKey: `0x${string}`) =>
-    writeContractAsync({ address, abi: SOUL_ABI, functionName: 'mint', args: [to, publicURI, encryptedURI, metadataHash, sealedKey] });
+    writeContractAsync({ address, chainId, abi: SOUL_ABI, functionName: 'mint', args: [to, publicURI, encryptedURI, metadataHash, sealedKey] });
   return { mint };
 }
 
-export function useSetMemory() {
-  const chainId = useChainId();
-  const address = contractAddressForChain(chainId);
+export function useSetMemory(network?: NetworkId) {
+  const walletChainId = useChainId();
+  const resolved = resolveNetwork(network, walletChainId);
+  const address = contractAddress(resolved);
+  const chainId = chainIdForNetwork(resolved);
   const { writeContractAsync } = useWriteContract();
   const setMemory = (tokenId: bigint, encryptedURI: string, metadataHash: `0x${string}`, sealedKey: `0x${string}`) =>
-    writeContractAsync({ address, abi: SOUL_ABI, functionName: 'setMemory', args: [tokenId, encryptedURI, metadataHash, sealedKey] });
+    writeContractAsync({ address, chainId, abi: SOUL_ABI, functionName: 'setMemory', args: [tokenId, encryptedURI, metadataHash, sealedKey] });
   return { setMemory };
 }
 
-export function useSetPublicProfile() {
-  const chainId = useChainId();
-  const address = contractAddressForChain(chainId);
+export function useSetPublicProfile(network?: NetworkId) {
+  const walletChainId = useChainId();
+  const resolved = resolveNetwork(network, walletChainId);
+  const address = contractAddress(resolved);
+  const chainId = chainIdForNetwork(resolved);
   const { writeContractAsync } = useWriteContract();
   const setPublicProfile = (tokenId: bigint, publicURI: string) =>
-    writeContractAsync({ address, abi: SOUL_ABI, functionName: 'setPublicProfile', args: [tokenId, publicURI] });
+    writeContractAsync({ address, chainId, abi: SOUL_ABI, functionName: 'setPublicProfile', args: [tokenId, publicURI] });
   return { setPublicProfile };
 }
 
-export function useTransfer() {
-  const chainId = useChainId();
-  const address = contractAddressForChain(chainId);
+export function useTransfer(network?: NetworkId) {
+  const walletChainId = useChainId();
+  const resolved = resolveNetwork(network, walletChainId);
+  const address = contractAddress(resolved);
+  const chainId = chainIdForNetwork(resolved);
   const { writeContractAsync } = useWriteContract();
   const transfer = (from: `0x${string}`, to: `0x${string}`, tokenId: bigint, sealedKey: `0x${string}`, proof: `0x${string}`) =>
-    writeContractAsync({ address, abi: SOUL_ABI, functionName: 'transfer', args: [from, to, tokenId, sealedKey, proof] });
+    writeContractAsync({ address, chainId, abi: SOUL_ABI, functionName: 'transfer', args: [from, to, tokenId, sealedKey, proof] });
   return { transfer };
 }
 
-function useRead(fn: 'publicURIOf' | 'encryptedURIOf' | 'sealedKeyOf' | 'ownerOf', tokenId?: bigint) {
-  const chainId = useChainId();
-  const address = contractAddressForChain(chainId);
+function useRead(fn: 'publicURIOf' | 'encryptedURIOf' | 'sealedKeyOf' | 'ownerOf', tokenId?: bigint, network?: NetworkId) {
+  const walletChainId = useChainId();
+  const resolved = resolveNetwork(network, walletChainId);
+  const address = contractAddress(resolved);
+  const chainId = chainIdForNetwork(resolved);
   return useReadContract({
     address,
+    chainId,
     abi: SOUL_ABI,
     functionName: fn,
     args: tokenId !== undefined ? [tokenId] : undefined,
@@ -53,10 +68,10 @@ function useRead(fn: 'publicURIOf' | 'encryptedURIOf' | 'sealedKeyOf' | 'ownerOf
   });
 }
 
-export const usePublicURIOf = (t?: bigint) => useRead('publicURIOf', t);
-export const useEncryptedURIOf = (t?: bigint) => useRead('encryptedURIOf', t);
-export const useSealedKeyOf = (t?: bigint) => useRead('sealedKeyOf', t);
-export const useOwnerOf = (t?: bigint) => useRead('ownerOf', t);
+export const usePublicURIOf = (t?: bigint, network?: NetworkId) => useRead('publicURIOf', t, network);
+export const useEncryptedURIOf = (t?: bigint, network?: NetworkId) => useRead('encryptedURIOf', t, network);
+export const useSealedKeyOf = (t?: bigint, network?: NetworkId) => useRead('sealedKeyOf', t, network);
+export const useOwnerOf = (t?: bigint, network?: NetworkId) => useRead('ownerOf', t, network);
 
 export { keccak256 };
 

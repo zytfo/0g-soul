@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useAccount, useChainId } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { Terminal, SoulBanner } from '@/components/Terminal';
 import { ChatConsole } from '@/components/ChatConsole';
-import { galleryNetwork } from '@/components/NetworkSwitcher';
-import { listSouls, avatarUrl } from '@/lib/soul-client';
+import { useGalleryNetwork } from '@/components/NetworkSwitcher';
+import { listSouls, avatarUrl, agentPath } from '@/lib/soul-client';
+import { networkShortLabel } from '@/lib/networks';
 import type { AgentState } from '@/lib/agent-core';
 
 const PRESETS = [
@@ -40,13 +41,12 @@ export default function Home() {
   const [genning, setGenning] = useState(false);
   const [genError, setGenError] = useState<string>();
   const { address } = useAccount();
-  const chainId = useChainId();
-  const network = galleryNetwork(chainId);
+  const network = useGalleryNetwork();
   const [soulTick, setSoulTick] = useState(0);
   const souls = useMemo(() => {
-    void soulTick; // bust cache after mint/back from chat
-    return address ? listSouls(address) : [];
-  }, [address, soulTick]);
+    void soulTick;
+    return address ? listSouls(address, network) : [];
+  }, [address, network, soulTick]);
 
   function create(e: React.FormEvent) {
     e.preventDefault();
@@ -96,12 +96,14 @@ export default function Home() {
               className="reveal space-y-2 border-t border-[var(--phosphor-deep)] pt-5"
               style={{ animationDelay: `${0.15 + BOOT.length * 0.25}s` }}
             >
-              <p className="text-sm text-[var(--phosphor-dim)]">your souls ({souls.length})</p>
+              <p className="text-sm text-[var(--phosphor-dim)]">
+                your souls on {networkShortLabel(network)} ({souls.length})
+              </p>
               <div className="space-y-1">
                 {souls.map((s) => (
                   <Link
-                    key={s.tokenId}
-                    href={`/agent/${s.tokenId}`}
+                    key={`${s.network}-${s.tokenId}`}
+                    href={agentPath(s.tokenId, s.network)}
                     className="flex items-center justify-between border border-[var(--phosphor-deep)] px-3 py-2 text-sm transition-colors hover:bg-[rgba(52,255,156,0.06)]"
                   >
                     <span className="flex items-center gap-2 glow">
@@ -247,6 +249,7 @@ export default function Home() {
         state && (
           <ChatConsole
             initialState={state}
+            soulNetwork={network}
             onBack={() => {
               setStage('create');
               setSoulTick((t) => t + 1);

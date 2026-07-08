@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useChainId } from 'wagmi';
 import { Terminal } from '@/components/Terminal';
-import { galleryNetwork } from '@/components/NetworkSwitcher';
 import { fetchSoulProfile, streamSeanceTurn, avatarUrl } from '@/lib/soul-client';
+import { networkShortLabel, type NetworkId } from '@/lib/networks';
 import { readingPauseMs, sleep, type SeancePace } from '@/lib/seance-pace';
 import type { SoulProfile, SeanceLine } from '@/lib/soul-types';
 
@@ -14,9 +13,7 @@ const TURNS_PER_ROUND = 8;
 type Entry = { id: number; speaker: SoulProfile; text: string };
 let _id = 0;
 
-export function SeanceRunner({ a, b }: { a: string; b: string }) {
-  const chainId = useChainId();
-  const network = galleryNetwork(chainId);
+export function SeanceRunner({ a, b, network }: { a: string; b: string; network: NetworkId }) {
   const [souls, setSouls] = useState<[SoulProfile, SoulProfile] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [feed, setFeed] = useState<Entry[]>([]);
@@ -124,13 +121,14 @@ export function SeanceRunner({ a, b }: { a: string; b: string }) {
     [pace, playOneTurn],
   );
 
-  const shareUrl = `https://0g-soul.vercel.app/seance/${a}/${b}`;
+  const shareQs = network === 'mainnet' ? '?network=mainnet' : '';
+  const shareUrl = `https://0g-soul.vercel.app/seance/${a}/${b}${shareQs}`;
   const tweet = souls
     ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${souls[0].name} just had a séance with ${souls[1].name} on 0G 👻 two on-chain AIs talking`)}&url=${encodeURIComponent(shareUrl)}`
     : '#';
 
   return (
-    <Terminal path="~/seance">
+    <Terminal path={`~/seance/${networkShortLabel(network)}`} hideNetworkSwitcher>
       <div className="flex h-[78vh] flex-col md:h-[64vh]">
         <div className="mb-3 flex flex-wrap items-center gap-3 border-b border-[var(--phosphor-deep)] pb-2 text-sm">
           <Link href="/seance" className="term-btn shrink-0 rounded-sm px-2 py-0.5 text-xs">‹ back</Link>
@@ -163,7 +161,7 @@ export function SeanceRunner({ a, b }: { a: string; b: string }) {
             <p key={e.id} className="reveal text-sm">
               <span className="inline-flex items-center gap-2 align-middle">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={avatarUrl(e.speaker.avatarRootHash)} alt="" className="h-5 w-5 rounded-sm" />
+                <img src={avatarUrl(e.speaker.avatarRootHash, network)} alt="" className="h-5 w-5 rounded-sm" />
                 <span className="text-[var(--phosphor-deep)]">{e.speaker.name.toLowerCase()}:</span>
               </span>{' '}
               <span className="glow">{e.text}</span>

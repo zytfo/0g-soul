@@ -67,3 +67,11 @@ export function contractAddressForChain(chainId?: number): `0x${string}` {
 export function explorerTx(network: NetworkId, hash: string): string {
   return `${NETWORKS[network].explorer}/tx/${hash}`;
 }
+
+export function networkShortLabel(network: NetworkId): string {
+  return network === 'mainnet' ? 'mainnet' : 'galileo';
+}
+
+export function chainIdForNetwork(network: NetworkId): number {
+  return NETWORKS[network].chain.id;
+}

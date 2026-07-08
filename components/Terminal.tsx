@@ -5,7 +5,15 @@ import Image from 'next/image';
 import { ReactNode } from 'react';
 import { NetworkSwitcher } from '@/components/NetworkSwitcher';
 
-export function Terminal({ children, path = '~' }: { children: ReactNode; path?: string }) {
+export function Terminal({
+  children,
+  path = '~',
+  hideNetworkSwitcher,
+}: {
+  children: ReactNode;
+  path?: string;
+  hideNetworkSwitcher?: boolean;
+}) {
   return (
     <div className="mx-auto w-full max-w-3xl px-3 py-5 sm:py-10">
       <div className="terminal rounded-sm">
@@ -18,7 +26,7 @@ export function Terminal({ children, path = '~' }: { children: ReactNode; path?:
             <span className="ml-2 truncate text-[var(--phosphor-dim)]">soul@0g:{path}$</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <NetworkSwitcher />
+            {!hideNetworkSwitcher && <NetworkSwitcher />}
             <ConnectButton.Custom>
               {({ account, chain, openConnectModal, openAccountModal, mounted }) => {
                 const connected = mounted && account && chain;

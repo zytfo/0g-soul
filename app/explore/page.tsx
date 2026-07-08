@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useChainId } from 'wagmi';
 import { Terminal } from '@/components/Terminal';
-import { avatarUrl } from '@/lib/soul-client';
-import { galleryNetwork } from '@/components/NetworkSwitcher';
+import { avatarUrl, agentPath } from '@/lib/soul-client';
+import { useGalleryNetwork } from '@/components/NetworkSwitcher';
+import { networkShortLabel } from '@/lib/networks';
 
 type Card = { tokenId: string; name: string; avatarRootHash: string | null; owner: string | null };
 
@@ -22,8 +22,7 @@ function SkeletonCard() {
 }
 
 export default function Explore() {
-  const chainId = useChainId();
-  const network = galleryNetwork(chainId);
+  const network = useGalleryNetwork();
   const [souls, setSouls] = useState<Card[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,7 +65,7 @@ export default function Explore() {
           <div>
             <p className="glow text-lg">{'// the soul gallery'}</p>
             <p className="text-[var(--phosphor-deep)] text-xs">
-              every Soul on {network === 'mainnet' ? '0G Mainnet' : 'Galileo testnet'} — from anyone
+              every Soul on {network === 'mainnet' ? '0G Mainnet' : 'Galileo testnet'} ({networkShortLabel(network)}) — from anyone
             </p>
             <Link href="/seance" className="text-xs text-[var(--phosphor-dim)] underline decoration-dotted">⚯ start a séance ›</Link>
           </div>
@@ -82,7 +81,7 @@ export default function Explore() {
                 : souls.map((s) => (
                     <Link
                       key={s.tokenId}
-                      href={`/agent/${s.tokenId}`}
+                      href={agentPath(s.tokenId, network)}
                       className="border border-[var(--phosphor-deep)] rounded-sm p-3 transition-colors hover:bg-[rgba(52,255,156,0.06)]"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
-import { useAccount, useChainId, usePublicClient, useSwitchChain, useSignMessage } from 'wagmi';
+import { useAccount, usePublicClient, useSwitchChain, useSignMessage } from 'wagmi';
 import { hexToBytes, toHex } from 'viem';
 import { appendTurn, boundHistory, type AgentState, toPublicProfile, toPrivateMemory } from '@/lib/agent-core';
-import { sendChatStream, distill, rememberSoul, forgetSoul, avatarUrl, uploadBlob, downloadBlob } from '@/lib/soul-client';
+import { sendChatStream, distill, rememberSoul, forgetSoul, avatarUrl, uploadBlob, downloadBlob, agentPath } from '@/lib/soul-client';
 import {
   useMint,
   useSetMemory,
@@ -17,8 +17,8 @@ import {
   useTransfer,
   keccak256,
 } from '@/lib/contract';
-import { aristotle, galileo, contractAddressForChain, explorerTx, networkFromChainId } from '@/lib/networks';
-import { readNetworkPref } from '@/components/NetworkSwitcher';
+import { aristotle, galileo, contractAddress, chainIdForNetwork, explorerTx, networkShortLabel } from '@/lib/networks';
+import { useGalleryNetwork } from '@/components/NetworkSwitcher';
 import { MemoryPanel } from '@/components/MemoryPanel';
 import { ShareButton } from '@/components/ShareButton';
 import { TransferModal } from '@/components/TransferModal';
@@ -61,10 +61,13 @@ export function ChatConsole({
   initialState,
   initialTokenId,
   onBack,
+  soulNetwork,
 }: {
   initialState: AgentState;
   initialTokenId?: bigint;
   onBack?: () => void;
+  /** When set (agent page), all reads/writes stay on this network. */
+  soulNetwork?: NetworkId;
 }) {
   const [state, setState] = useState<AgentState>(initialState);
   const [tokenId, setTokenId] = useState<bigint | undefined>(initialTokenId);
@@ -90,18 +93,18 @@ export function ChatConsole({
   const canTts = useSyncExternalStore(() => () => {}, ttsSupported, () => false);
 
   const { address, isConnected, chainId } = useAccount();
-  const walletChainId = useChainId();
-  const network = networkFromChainId(walletChainId);
-  const publicClient = usePublicClient();
+  const browseNetwork = useGalleryNetwork();
+  const network = soulNetwork ?? browseNetwork;
+  const publicClient = usePublicClient({ chainId: chainIdForNetwork(network) });
   const { switchChainAsync } = useSwitchChain();
   const { signMessageAsync } = useSignMessage();
-  const { mint } = useMint();
-  const { setMemory } = useSetMemory();
-  const { setPublicProfile } = useSetPublicProfile();
-  const { transfer } = useTransfer();
-  const { data: owner } = useOwnerOf(tokenId);
-  const { data: sealedKeyData } = useSealedKeyOf(tokenId);
-  const { data: encryptedURIData } = useEncryptedURIOf(tokenId);
+  const { mint } = useMint(network);
+  const { setMemory } = useSetMemory(network);
+  const { setPublicProfile } = useSetPublicProfile(network);
+  const { transfer } = useTransfer(network);
+  const { data: owner } = useOwnerOf(tokenId, network);
+  const { data: sealedKeyData } = useSealedKeyOf(tokenId, network);
+  const { data: encryptedURIData } = useEncryptedURIOf(tokenId, network);
   const ownerStr = typeof owner === 'string' ? owner : undefined;
   const isOwner = !!address && !!ownerStr && address.toLowerCase() === ownerStr.toLowerCase();
 
@@ -146,8 +149,7 @@ export function ChatConsole({
   }
 
   async function ensureChain() {
-    const pref = readNetworkPref();
-    const target = pref === 'mainnet' ? aristotle.id : galileo.id;
+    const target = network === 'mainnet' ? aristotle.id : galileo.id;
     if (chainId !== target) await switchChainAsync({ chainId: target });
   }
 
@@ -170,13 +172,18 @@ export function ChatConsole({
       push({ role: 'sys', text: `mint tx ${short(hash)} → ${explorerTx(network, hash)}` });
       setWorking('waiting for confirmation on 0G Chain (may take ~30s)');
       const receipt = await pollReceipt(publicClient, hash);
-      const contract = contractAddressForChain(walletChainId);
+      const contract = contractAddress(network);
       const tid = tokenIdFromReceipt(receipt, contract);
       if (tid === undefined) throw new Error('could not read tokenId from receipt');
       setTokenId(tid);
-      rememberSoul(address, { tokenId: tid.toString(), name: state.name });
+      rememberSoul(address, { tokenId: tid.toString(), name: state.name, network });
       setUnlocked(true);
-      push({ role: 'sys', tone: 'amber', glitch: true, text: `✦ minted Soul #${tid} — memory encrypted, only you can read it. share: ${origin()}/agent/${tid}` });
+      push({
+        role: 'sys',
+        tone: 'amber',
+        glitch: true,
+        text: `✦ minted Soul #${tid} on ${networkShortLabel(network)} — memory encrypted, only you can read it. share: ${origin()}${agentPath(tid, network)}`,
+      });
     } catch (err) {
       push({ role: 'sys', tone: 'magenta', text: `! ${errMsg(err)}` });
     } finally {
@@ -271,7 +278,7 @@ export function ChatConsole({
       push({ role: 'sys', text: `transfer tx ${short(hash)} → ${explorerTx(network, hash)}` });
       setWorking('waiting for confirmation on 0G Chain (may take ~30s)');
       await pollReceipt(publicClient, hash);
-      forgetSoul(address, tokenId.toString());
+      forgetSoul(address, tokenId.toString(), network);
       setTransferOpen(false);
       push({
         role: 'sys',
@@ -348,6 +355,8 @@ export function ChatConsole({
             ◈ {state.name}{' '}
             <span className="text-[var(--phosphor-dim)]">
               {tokenId !== undefined ? `· Soul #${tokenId.toString()}` : '· unminted'}
+              {' · '}
+              {networkShortLabel(network)}
             </span>
           </span>
         </span>
@@ -386,6 +395,7 @@ export function ChatConsole({
             unlocked={unlocked}
             onUnlock={unlock}
             unlockDisabled={unlockDisabled}
+            network={network}
           />
         </div>
       </div>
@@ -459,7 +469,7 @@ export function ChatConsole({
             </span>
           </>
         )}
-        {tokenId !== undefined && <ShareButton tokenId={tokenId} name={state.name} />}
+        {tokenId !== undefined && <ShareButton tokenId={tokenId} name={state.name} network={network} />}
         {canTts && (
           <button type="button" onClick={() => { setVoiceOn((v) => { if (v) cancelSpeak(); return !v; }); }}
             className={`term-btn rounded-sm px-2 py-1 text-xs ${voiceOn ? 'is-active' : ''}`}>

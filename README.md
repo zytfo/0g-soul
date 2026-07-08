@@ -23,7 +23,7 @@ Built for **[The Zero Cup - 0G's Global Vibe Coding Tournament](https://0g.ai/ar
 - 🎙️ **Interactive séance** - choose slow, normal, or manual pacing; spirits pause between
   lines so you can actually follow the conversation.
 - ⚡ **Faster gallery** - multicall batch reads + server cache; skeleton loading states.
-- ✨ **UX polish** — chat stays focused after send; transfer uses a proper modal.
+- ✨ **UX polish** - chat stays focused after send; transfer uses a proper modal.
 
 ---
 

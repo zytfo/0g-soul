@@ -2,17 +2,15 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useChainId } from 'wagmi';
 import { Terminal } from '@/components/Terminal';
-import { galleryNetwork } from '@/components/NetworkSwitcher';
-import { avatarUrl } from '@/lib/soul-client';
+import { useGalleryNetwork } from '@/components/NetworkSwitcher';
+import { avatarUrl, seancePath } from '@/lib/soul-client';
 
 type Card = { tokenId: string; name: string; avatarRootHash: string | null };
 
 export default function SeancePicker() {
   const router = useRouter();
-  const chainId = useChainId();
-  const network = galleryNetwork(chainId);
+  const network = useGalleryNetwork();
   const [opts, setOpts] = useState<Card[]>([]);
   const [a, setA] = useState('');
   const [b, setB] = useState('');
@@ -62,7 +60,7 @@ export default function SeancePicker() {
         setErr(`soul${missing.length > 1 ? 's' : ''} #${missing.join(', #')} ${missing.length > 1 ? "don't" : "doesn't"} exist — pick real ones`);
         return;
       }
-      router.push(`/seance/${a.trim()}/${b.trim()}`);
+      router.push(seancePath(a.trim(), b.trim(), network));
     } catch {
       setErr('could not verify the souls — try again');
     } finally {

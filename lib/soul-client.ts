@@ -116,29 +116,61 @@ export async function downloadBlob(rootHash: string, network: NetworkId = 'testn
   return new Uint8Array(await res.arrayBuffer());
 }
 
-/* --- local registry of souls this wallet has minted (per address) --- */
-export type SoulRef = { tokenId: string; name: string };
+/* --- local registry of souls this wallet has minted (per address + network) --- */
+export type SoulRef = { tokenId: string; name: string; network: NetworkId };
 
-const OWNED = (addr: string) => `soul:owned:${addr.toLowerCase()}`;
+const OWNED = (addr: string, network: NetworkId) => `soul:owned:${network}:${addr.toLowerCase()}`;
+const LEGACY_OWNED = (addr: string) => `soul:owned:${addr.toLowerCase()}`;
+
+export function agentPath(tokenId: string | bigint, network: NetworkId = 'testnet'): string {
+  const id = tokenId.toString();
+  return network === 'mainnet' ? `/agent/${id}?network=mainnet` : `/agent/${id}`;
+}
+
+export function seancePath(a: string, b: string, network: NetworkId = 'testnet'): string {
+  const base = `/seance/${a}/${b}`;
+  return network === 'mainnet' ? `${base}?network=mainnet` : base;
+}
+
+function migrateLegacy(addr: string) {
+  try {
+    const raw = localStorage.getItem(LEGACY_OWNED(addr));
+    if (!raw) return;
+    const list = (JSON.parse(raw) as { tokenId: string; name: string }[]).map((s) => ({
+      ...s,
+      network: 'testnet' as NetworkId,
+    }));
+    localStorage.setItem(OWNED(addr, 'testnet'), JSON.stringify(list));
+    localStorage.removeItem(LEGACY_OWNED(addr));
+  } catch {}
+}
 
 export function rememberSoul(addr: string, ref: SoulRef) {
   try {
-    const list = listSouls(addr).filter((s) => s.tokenId !== ref.tokenId);
-    list.unshift(ref);
-    localStorage.setItem(OWNED(addr), JSON.stringify(list));
+    migrateLegacy(addr);
+    const network = ref.network ?? 'testnet';
+    const list = listSouls(addr, network).filter((s) => s.tokenId !== ref.tokenId);
+    list.unshift({ ...ref, network });
+    localStorage.setItem(OWNED(addr, network), JSON.stringify(list));
   } catch {}
 }
 
-export function forgetSoul(addr: string, tokenId: string) {
+export function forgetSoul(addr: string, tokenId: string, network: NetworkId = 'testnet') {
   try {
-    localStorage.setItem(OWNED(addr), JSON.stringify(listSouls(addr).filter((s) => s.tokenId !== tokenId)));
+    migrateLegacy(addr);
+    localStorage.setItem(
+      OWNED(addr, network),
+      JSON.stringify(listSouls(addr, network).filter((s) => s.tokenId !== tokenId)),
+    );
   } catch {}
 }
 
-export function listSouls(addr: string): SoulRef[] {
+export function listSouls(addr: string, network: NetworkId): SoulRef[] {
   try {
-    const raw = localStorage.getItem(OWNED(addr));
-    return raw ? (JSON.parse(raw) as SoulRef[]) : [];
+    if (network === 'testnet') migrateLegacy(addr);
+    const raw = localStorage.getItem(OWNED(addr, network));
+    if (!raw) return [];
+    return (JSON.parse(raw) as SoulRef[]).map((s) => ({ ...s, network: s.network ?? network }));
   } catch {
     return [];
   }
