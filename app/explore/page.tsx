@@ -64,7 +64,7 @@ export default function Explore() {
         <div className="flex items-center gap-3">
           <Link href="/" className="term-btn shrink-0 rounded-sm px-2 py-0.5 text-xs">‹ back</Link>
           <div>
-            <p className="glow text-lg">// the soul gallery</p>
+            <p className="glow text-lg">{'// the soul gallery'}</p>
             <p className="text-[var(--phosphor-deep)] text-xs">
               every Soul on {network === 'mainnet' ? '0G Mainnet' : 'Galileo testnet'} — from anyone
             </p>

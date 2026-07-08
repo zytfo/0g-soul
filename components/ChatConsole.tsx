@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useSignMessage } from 'wagmi';
 import { hexToBytes, toHex } from 'viem';
@@ -86,8 +86,8 @@ export function ChatConsole({
   const [transferOpen, setTransferOpen] = useState(false);
   const stopRef = useRef<() => void>(() => {});
   const inputRef = useRef<HTMLInputElement>(null);
-  const [canStt, setCanStt] = useState(false);
-  const [canTts, setCanTts] = useState(false);
+  const canStt = useSyncExternalStore(() => () => {}, sttSupported, () => false);
+  const canTts = useSyncExternalStore(() => () => {}, ttsSupported, () => false);
 
   const { address, isConnected, chainId } = useAccount();
   const walletChainId = useChainId();
@@ -110,8 +110,6 @@ export function ChatConsole({
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
   }, [feed, working]);
 
-  // Feature-detect voice APIs on mount (client-only, SSR-safe)
-  useEffect(() => { setCanStt(sttSupported()); setCanTts(ttsSupported()); }, []);
   // Cancel any in-progress speech + dictation on unmount
   useEffect(() => () => { cancelSpeak(); stopRef.current(); }, []);
 

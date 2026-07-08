@@ -22,6 +22,7 @@ export function SeanceRunner({ a, b }: { a: string; b: string }) {
   const [feed, setFeed] = useState<Entry[]>([]);
   const [running, setRunning] = useState(false);
   const [waiting, setWaiting] = useState(false);
+  const [waitingSpeaker, setWaitingSpeaker] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [pace, setPace] = useState<SeancePace>('normal');
   const [turnsLeft, setTurnsLeft] = useState(0);
@@ -41,7 +42,7 @@ export function SeanceRunner({ a, b }: { a: string; b: string }) {
     if (loaded.current) return;
     loaded.current = true;
     (async () => {
-      const [pa, pb] = await Promise.all([fetchSoulProfile(a), fetchSoulProfile(b)]);
+      const [pa, pb] = await Promise.all([fetchSoulProfile(a, network), fetchSoulProfile(b, network)]);
       if (!pa || !pb) {
         setError('could not summon one of the souls');
         return;
@@ -49,7 +50,7 @@ export function SeanceRunner({ a, b }: { a: string; b: string }) {
       setSouls([pa, pb]);
       pairRef.current = [pa, pb];
     })();
-  }, [a, b]);
+  }, [a, b, network]);
 
   const playOneTurn = useCallback(async (pair: [SoulProfile, SoulProfile]) => {
     const speaker = pair[speakerIdxRef.current];
@@ -58,9 +59,9 @@ export function SeanceRunner({ a, b }: { a: string; b: string }) {
     setFeed((f) => [...f, { id: entryId, speaker, text: '' }]);
     let line = '';
     try {
-        line = await streamSeanceTurn(speaker, other.name, transcript.current, (d) => {
-          setFeed((f) => f.map((e) => (e.id === entryId ? { ...e, text: e.text + d } : e)));
-        }, network);
+      line = await streamSeanceTurn(speaker, other.name, transcript.current, (d) => {
+        setFeed((f) => f.map((e) => (e.id === entryId ? { ...e, text: e.text + d } : e)));
+      }, network);
     } catch {
       setFeed((f) => f.map((e) => (e.id === entryId ? { ...e, text: '… (the séance faded)' } : e)));
       return false;
@@ -81,6 +82,7 @@ export function SeanceRunner({ a, b }: { a: string; b: string }) {
       setRunning(true);
       setDone(false);
       setWaiting(false);
+      setWaitingSpeaker(null);
       stopFlag.current = false;
       waitFlag.current = false;
       setTurnsLeft(turns);
@@ -94,6 +96,7 @@ export function SeanceRunner({ a, b }: { a: string; b: string }) {
         const last = transcript.current[transcript.current.length - 1];
         if (t < turns - 1 && !stopFlag.current) {
           if (pace === 'manual') {
+            setWaitingSpeaker(pair[speakerIdxRef.current]?.name ?? null);
             setWaiting(true);
             waitFlag.current = false;
             await new Promise<void>((resolve) => {
@@ -104,6 +107,7 @@ export function SeanceRunner({ a, b }: { a: string; b: string }) {
               poll();
             });
             setWaiting(false);
+            setWaitingSpeaker(null);
             if (stopFlag.current) break;
           } else {
             await sleep(readingPauseMs(last?.text ?? '', pace), () => stopFlag.current);
@@ -113,18 +117,17 @@ export function SeanceRunner({ a, b }: { a: string; b: string }) {
 
       setRunning(false);
       setWaiting(false);
+      setWaitingSpeaker(null);
       setTurnsLeft(0);
       setDone(true);
     },
-    [pace, network, playOneTurn],
+    [pace, playOneTurn],
   );
 
   const shareUrl = `https://0g-soul.vercel.app/seance/${a}/${b}`;
   const tweet = souls
     ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${souls[0].name} just had a séance with ${souls[1].name} on 0G 👻 two on-chain AIs talking`)}&url=${encodeURIComponent(shareUrl)}`
     : '#';
-
-  const nextSpeaker = souls && pairRef.current ? pairRef.current[speakerIdxRef.current]?.name : null;
 
   return (
     <Terminal path="~/seance">
@@ -167,9 +170,9 @@ export function SeanceRunner({ a, b }: { a: string; b: string }) {
             </p>
           ))}
           {running && !waiting && <p className="text-[var(--phosphor-dim)] text-sm">…<span className="cursor" /></p>}
-          {waiting && nextSpeaker && (
+          {waiting && waitingSpeaker && (
             <p className="text-[var(--phosphor-dim)] text-sm animate-pulse">
-              {nextSpeaker.toLowerCase()} gathers their thoughts…
+              {waitingSpeaker.toLowerCase()} gathers their thoughts…
             </p>
           )}
         </div>

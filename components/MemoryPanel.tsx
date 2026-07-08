@@ -26,7 +26,7 @@ export function MemoryPanel({
   const explorer = NETWORKS[network].explorer;
   return (
     <aside className="terminal rounded-sm p-3 text-xs space-y-2 md:max-h-full md:overflow-y-auto">
-      <p className="text-[var(--phosphor-dim)]">// memory.state</p>
+      <p className="text-[var(--phosphor-dim)]">{'// memory.state'}</p>
       <Row k="name" v={state.name} />
       <Row k="token" v={tokenId !== undefined ? `#${tokenId}` : 'unminted'} />
       {/* summary and facts are private — gated by owner unlock */}

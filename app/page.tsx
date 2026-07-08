@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useAccount, useChainId } from 'wagmi';
 import { Terminal, SoulBanner } from '@/components/Terminal';
 import { ChatConsole } from '@/components/ChatConsole';
 import { galleryNetwork } from '@/components/NetworkSwitcher';
-import { listSouls, avatarUrl, type SoulRef } from '@/lib/soul-client';
+import { listSouls, avatarUrl } from '@/lib/soul-client';
 import type { AgentState } from '@/lib/agent-core';
 
 const PRESETS = [
@@ -42,10 +42,11 @@ export default function Home() {
   const { address } = useAccount();
   const chainId = useChainId();
   const network = galleryNetwork(chainId);
-  const [souls, setSouls] = useState<SoulRef[]>([]);
-  useEffect(() => {
-    setSouls(address ? listSouls(address) : []);
-  }, [address]);
+  const [soulTick, setSoulTick] = useState(0);
+  const souls = useMemo(() => {
+    void soulTick; // bust cache after mint/back from chat
+    return address ? listSouls(address) : [];
+  }, [address, soulTick]);
 
   function create(e: React.FormEvent) {
     e.preventDefault();
@@ -248,7 +249,7 @@ export default function Home() {
             initialState={state}
             onBack={() => {
               setStage('create');
-              setSouls(address ? listSouls(address) : []);
+              setSoulTick((t) => t + 1);
             }}
           />
         )
