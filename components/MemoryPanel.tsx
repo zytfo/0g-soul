@@ -1,7 +1,7 @@
 'use client';
+import { useChainId } from 'wagmi';
 import type { AgentState } from '@/lib/agent-core';
-
-const EXPLORER = 'https://chainscan-galileo.0g.ai';
+import { contractAddressForChain, NETWORKS, networkFromChainId } from '@/lib/networks';
 
 export function MemoryPanel({
   state,
@@ -20,6 +20,10 @@ export function MemoryPanel({
   onUnlock?: () => void;
   unlockDisabled?: boolean;
 }) {
+  const chainId = useChainId();
+  const network = networkFromChainId(chainId);
+  const contract = contractAddressForChain(chainId);
+  const explorer = NETWORKS[network].explorer;
   return (
     <aside className="terminal rounded-sm p-3 text-xs space-y-2 md:max-h-full md:overflow-y-auto">
       <p className="text-[var(--phosphor-dim)]">// memory.state</p>
@@ -74,10 +78,10 @@ export function MemoryPanel({
           <span className="glow">{memoryRootHash.slice(0, 10)}…{memoryRootHash.slice(-6)}</span>
         </p>
       )}
-      {tokenId !== undefined && process.env.NEXT_PUBLIC_CONTRACT_ADDRESS && (
+      {tokenId !== undefined && (
         <p>
           <span className="text-[var(--phosphor-deep)]">contract:</span>{' '}
-          <a className="underline decoration-dotted" href={`${EXPLORER}/address/${process.env.NEXT_PUBLIC_CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer">on 0G Chain ›</a>
+          <a className="underline decoration-dotted" href={`${explorer}/address/${contract}`} target="_blank" rel="noopener noreferrer">on 0G Chain ›</a>
         </p>
       )}
     </aside>

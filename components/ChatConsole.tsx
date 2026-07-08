@@ -2,17 +2,30 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useAccount, usePublicClient, useSwitchChain, useSignMessage } from 'wagmi';
+import { useAccount, useChainId, usePublicClient, useSwitchChain, useSignMessage } from 'wagmi';
 import { hexToBytes, toHex } from 'viem';
 import { appendTurn, boundHistory, type AgentState, toPublicProfile, toPrivateMemory } from '@/lib/agent-core';
 import { sendChatStream, distill, rememberSoul, forgetSoul, avatarUrl, uploadBlob, downloadBlob } from '@/lib/soul-client';
-import { useMint, useSetMemory, useOwnerOf, useEncryptedURIOf, useSealedKeyOf, tokenIdFromReceipt, useTransfer, keccak256 } from '@/lib/contract';
-import { galileo } from '@/lib/chain';
+import {
+  useMint,
+  useSetMemory,
+  useSetPublicProfile,
+  useOwnerOf,
+  useEncryptedURIOf,
+  useSealedKeyOf,
+  tokenIdFromReceipt,
+  useTransfer,
+  keccak256,
+} from '@/lib/contract';
+import { aristotle, galileo, contractAddressForChain, explorerTx, networkFromChainId } from '@/lib/networks';
+import { readNetworkPref } from '@/components/NetworkSwitcher';
 import { MemoryPanel } from '@/components/MemoryPanel';
 import { ShareButton } from '@/components/ShareButton';
+import { TransferModal } from '@/components/TransferModal';
 import { sttSupported, ttsSupported, startDictation, speak, cancelSpeak } from '@/lib/voice';
 import { randomKey, sealKey, wrapKeyFromSignature, encryptJSON, unsealKey, decryptJSON } from '@/lib/crypto';
 import type { ChatMessage } from '@/lib/agent-core';
+import type { NetworkId } from '@/lib/networks';
 
 type Entry = {
   id: number;
@@ -22,7 +35,7 @@ type Entry = {
   glitch?: boolean;
 };
 
-const EXPLORER = 'https://chainscan-galileo.0g.ai';
+const ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
 let _id = 0;
 const eid = () => ++_id;
 
@@ -30,13 +43,14 @@ const eid = () => ++_id;
 async function sealAndUpload(
   state: AgentState,
   signature: string,
+  network: NetworkId,
 ): Promise<{ publicURI: string; encryptedURI: string; metadataHash: `0x${string}`; sealedKey: `0x${string}` }> {
   const pub = toPublicProfile(state);
   const priv = toPrivateMemory(state);
-  const publicURI = await uploadBlob(new TextEncoder().encode(JSON.stringify(pub)));
+  const publicURI = await uploadBlob(new TextEncoder().encode(JSON.stringify(pub)), network);
   const K = await randomKey();
   const cipher = await encryptJSON(priv, K);
-  const encryptedURI = await uploadBlob(cipher);
+  const encryptedURI = await uploadBlob(cipher, network);
   const metadataHash = keccak256(new TextEncoder().encode(JSON.stringify(priv)));
   const wrap = await wrapKeyFromSignature(signature);
   const sealedKeyBytes = toHex(await sealKey(K, wrap));
@@ -69,16 +83,21 @@ export function ChatConsole({
   const [voiceOn, setVoiceOn] = useState(false);
   const [listening, setListening] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const stopRef = useRef<() => void>(() => {});
+  const inputRef = useRef<HTMLInputElement>(null);
   const [canStt, setCanStt] = useState(false);
   const [canTts, setCanTts] = useState(false);
 
   const { address, isConnected, chainId } = useAccount();
+  const walletChainId = useChainId();
+  const network = networkFromChainId(walletChainId);
   const publicClient = usePublicClient();
   const { switchChainAsync } = useSwitchChain();
   const { signMessageAsync } = useSignMessage();
   const { mint } = useMint();
   const { setMemory } = useSetMemory();
+  const { setPublicProfile } = useSetPublicProfile();
   const { transfer } = useTransfer();
   const { data: owner } = useOwnerOf(tokenId);
   const { data: sealedKeyData } = useSealedKeyOf(tokenId);
@@ -117,7 +136,7 @@ export function ChatConsole({
       setWorking(null);
       setFeed((f) => f.map((m) => (m.id === aiId ? { ...m, text: m.text + delta } : m)));
     };
-    const { text, fallback } = await sendChatStream(state, msg, onToken);
+    const { text, fallback } = await sendChatStream(state, msg, onToken, network);
     // reconcile the displayed entry to the authoritative final text
     setFeed((f) => f.map((m) => (m.id === aiId ? { ...m, text } : m)));
     setOffline(fallback);
@@ -125,38 +144,40 @@ export function ChatConsole({
     setState((s) => boundHistory(appendTurn(s, msg, text)).state);
     setWorking(null);
     setBusy(false);
+    inputRef.current?.focus();
   }
 
-  async function ensureGalileo() {
-    if (chainId !== galileo.id) {
-      await switchChainAsync({ chainId: galileo.id });
-    }
+  async function ensureChain() {
+    const pref = readNetworkPref();
+    const target = pref === 'mainnet' ? aristotle.id : galileo.id;
+    if (chainId !== target) await switchChainAsync({ chainId: target });
   }
 
   async function onMint() {
     if (busy || !address) return;
     setBusy(true);
     try {
-      await ensureGalileo();
+      await ensureChain();
       setWorking('distilling memory (0G Compute)…');
-      const toSave = await withDistilledMemory(state);
+      const toSave = await withDistilledMemory(state, network);
       if (toSave !== state) setState(toSave);
       setWorking('sign to encrypt your private memory');
       const signature = await signMessageAsync({ message: 'SOUL:unlock:v1' });
       setWorking('encrypting + writing to 0G Storage');
-      const { publicURI, encryptedURI, metadataHash, sealedKey } = await sealAndUpload(toSave, signature);
+      const { publicURI, encryptedURI, metadataHash, sealedKey } = await sealAndUpload(toSave, signature, network);
       setMemoryRootHash(encryptedURI);
       push({ role: 'sys', text: `memory encrypted → 0G Storage ✓  root ${short(encryptedURI)}` });
       setWorking('minting INFT on 0G Chain — confirm in wallet');
       const hash = await mint(address, publicURI, encryptedURI, metadataHash, sealedKey);
-      push({ role: 'sys', text: `mint tx ${short(hash)} → ${EXPLORER}/tx/${hash}` });
+      push({ role: 'sys', text: `mint tx ${short(hash)} → ${explorerTx(network, hash)}` });
       setWorking('waiting for confirmation on 0G Chain (may take ~30s)');
       const receipt = await pollReceipt(publicClient, hash);
-      const tid = tokenIdFromReceipt(receipt);
+      const contract = contractAddressForChain(walletChainId);
+      const tid = tokenIdFromReceipt(receipt, contract);
       if (tid === undefined) throw new Error('could not read tokenId from receipt');
       setTokenId(tid);
       rememberSoul(address, { tokenId: tid.toString(), name: state.name });
-      setUnlocked(true); // owner just encrypted — memory is already in state
+      setUnlocked(true);
       push({ role: 'sys', tone: 'amber', glitch: true, text: `✦ minted Soul #${tid} — memory encrypted, only you can read it. share: ${origin()}/agent/${tid}` });
     } catch (err) {
       push({ role: 'sys', tone: 'magenta', text: `! ${errMsg(err)}` });
@@ -170,25 +191,98 @@ export function ChatConsole({
     if (busy || tokenId === undefined) return;
     setBusy(true);
     try {
-      await ensureGalileo();
+      await ensureChain();
       setWorking('distilling memory (0G Compute)…');
-      const toSave = await withDistilledMemory(state);
+      const toSave = await withDistilledMemory(state, network);
       if (toSave !== state) setState(toSave);
       setWorking('sign to encrypt your private memory');
       const signature = await signMessageAsync({ message: 'SOUL:unlock:v1' });
       setWorking('encrypting + writing to 0G Storage');
-      const { encryptedURI, metadataHash, sealedKey } = await sealAndUpload(toSave, signature);
+      const { encryptedURI, metadataHash, sealedKey } = await sealAndUpload(toSave, signature, network);
       setMemoryRootHash(encryptedURI);
       push({ role: 'sys', text: `memory encrypted → 0G Storage ✓  root ${short(encryptedURI)}` });
       setWorking('updating on-chain pointer — confirm in wallet');
       const hash = await setMemory(tokenId, encryptedURI, metadataHash, sealedKey);
-      push({ role: 'sys', text: `update tx ${short(hash)} → ${EXPLORER}/tx/${hash}` });
+      push({ role: 'sys', text: `update tx ${short(hash)} → ${explorerTx(network, hash)}` });
       setWorking('waiting for confirmation on 0G Chain (may take ~30s)');
       await pollReceipt(publicClient, hash);
       setUnlocked(true);
       push({ role: 'sys', tone: 'amber', text: `✦ memory updated (encrypted) on-chain` });
     } catch (err) {
       push({ role: 'sys', tone: 'magenta', text: `! ${errMsg(err)}` });
+    } finally {
+      setWorking(null);
+      setBusy(false);
+    }
+  }
+
+  async function onEvolvePortrait() {
+    if (busy || tokenId === undefined || !isOwner) return;
+    setBusy(true);
+    const prevHash = state.avatarRootHash;
+    try {
+      await ensureChain();
+      setWorking('distilling memory for portrait (0G Compute)…');
+      const enriched = await withDistilledMemory(state, network);
+      if (enriched !== state) setState(enriched);
+      setWorking('evolving portrait on 0G image model (~30s)…');
+      const res = await fetch('/api/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personality: enriched.personality,
+          memorySummary: enriched.memorySummary,
+          keyFacts: enriched.keyFacts,
+          evolve: true,
+          network,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.rootHash) throw new Error(j.error || 'portrait evolution failed');
+      const nextState = { ...enriched, avatarRootHash: j.rootHash as string };
+      setState(nextState);
+      setWorking('writing evolved profile to 0G Storage');
+      const publicURI = await uploadBlob(new TextEncoder().encode(JSON.stringify(toPublicProfile(nextState))), network);
+      setWorking('updating on-chain portrait — confirm in wallet');
+      const hash = await setPublicProfile(tokenId, publicURI);
+      push({
+        role: 'sys',
+        tone: 'amber',
+        glitch: true,
+        text: `✦ portrait evolved on-chain ${prevHash ? `(was ${short(prevHash)})` : ''} → tx ${short(hash)}`,
+      });
+    } catch (err) {
+      push({ role: 'sys', tone: 'magenta', text: `! ${errMsg(err)}` });
+    } finally {
+      setWorking(null);
+      setBusy(false);
+    }
+  }
+
+  async function onTransfer(to: string) {
+    if (!ADDR_RE.test(to)) {
+      push({ role: 'sys', tone: 'magenta', text: '! invalid address' });
+      return;
+    }
+    if (tokenId === undefined || !address) return;
+    setBusy(true);
+    try {
+      await ensureChain();
+      setWorking('transferring on 0G Chain — confirm in wallet');
+      const hash = await transfer(address as `0x${string}`, to as `0x${string}`, tokenId, '0x', '0x01');
+      push({ role: 'sys', text: `transfer tx ${short(hash)} → ${explorerTx(network, hash)}` });
+      setWorking('waiting for confirmation on 0G Chain (may take ~30s)');
+      await pollReceipt(publicClient, hash);
+      forgetSoul(address, tokenId.toString());
+      setTransferOpen(false);
+      push({
+        role: 'sys',
+        tone: 'amber',
+        glitch: true,
+        text: `✦ transferred Soul #${tokenId} to ${short(to)} — they inherit the character; your private memory stays encrypted to you`,
+      });
+    } catch (e) {
+      push({ role: 'sys', tone: 'magenta', text: `! ${errMsg(e)}` });
     } finally {
       setWorking(null);
       setBusy(false);
@@ -205,7 +299,7 @@ export function ChatConsole({
       const encURI = encryptedURIData as string;
       if (!sealedHex || sealedHex === '0x' || !encURI) { setUnlocked(true); return; }
       const K = await unsealKey(new Uint8Array(hexToBytes(sealedHex)), wrap);
-      const cipher = await downloadBlob(encURI);
+      const cipher = await downloadBlob(encURI, network);
       const priv = await decryptJSON<{ memorySummary: string; keyFacts: string[]; history: ChatMessage[] }>(new Uint8Array(cipher) as Uint8Array<ArrayBuffer>, K);
       const past = Array.isArray(priv.history) ? priv.history : [];
       // restore the full private memory: summary + facts into the panel, and the saved
@@ -248,7 +342,7 @@ export function ChatConsole({
             {state.avatarRootHash && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={avatarUrl(state.avatarRootHash)}
+                src={avatarUrl(state.avatarRootHash, network)}
                 alt=""
                 className="h-7 w-7 rounded-sm"
               />
@@ -314,6 +408,7 @@ export function ChatConsole({
           </button>
         )}
         <input
+          ref={inputRef}
           className="term-input flex-1"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -343,30 +438,11 @@ export function ChatConsole({
             <button onClick={onUpdate} disabled={busy} className="term-btn rounded-sm px-4 py-2 text-sm">
               update memory on-chain
             </button>
+            <button onClick={onEvolvePortrait} disabled={busy} className="term-btn rounded-sm px-4 py-2 text-sm">
+              evolve portrait ◈
+            </button>
             <button
-              onClick={async () => {
-                const to = prompt('transfer to address (0x…):')?.trim();
-                if (!to || !/^0x[a-fA-F0-9]{40}$/.test(to)) {
-                  push({ role: 'sys', tone: 'magenta', text: '! invalid address' });
-                  return;
-                }
-                setBusy(true);
-                try {
-                  await ensureGalileo();
-                  setWorking('transferring on 0G Chain — confirm in wallet');
-                  const hash = await transfer(address as `0x${string}`, to as `0x${string}`, tokenId, '0x', '0x01');
-                  push({ role: 'sys', text: `transfer tx ${short(hash)} → ${EXPLORER}/tx/${hash}` });
-                  setWorking('waiting for confirmation on 0G Chain (may take ~30s)');
-                  await pollReceipt(publicClient, hash);
-                  if (address) forgetSoul(address, tokenId.toString());
-                  push({ role: 'sys', tone: 'amber', glitch: true, text: `✦ transferred Soul #${tokenId} to ${short(to)} — they inherit the character; your private memory stays encrypted to you` });
-                } catch (e) {
-                  push({ role: 'sys', tone: 'magenta', text: `! ${errMsg(e)}` });
-                } finally {
-                  setWorking(null);
-                  setBusy(false);
-                }
-              }}
+              onClick={() => setTransferOpen(true)}
               disabled={busy}
               className="term-btn rounded-sm px-4 py-2 text-sm"
             >
@@ -393,6 +469,12 @@ export function ChatConsole({
           </button>
         )}
       </div>
+      <TransferModal
+        open={transferOpen}
+        busy={busy}
+        onClose={() => setTransferOpen(false)}
+        onConfirm={(to) => onTransfer(to)}
+      />
     </div>
   );
 }
@@ -456,8 +538,8 @@ async function pollReceipt(client: PClient, hash: `0x${string}`, timeoutMs = 120
 }
 
 /** Enrich state with distilled memory (summary + facts) before saving; on failure, save as-is. */
-async function withDistilledMemory(state: AgentState): Promise<AgentState> {
-  const d = await distill(state);
+async function withDistilledMemory(state: AgentState, network: NetworkId): Promise<AgentState> {
+  const d = await distill(state, network);
   return d && (d.memorySummary || d.keyFacts.length)
     ? { ...state, memorySummary: d.memorySummary, keyFacts: d.keyFacts }
     : state;

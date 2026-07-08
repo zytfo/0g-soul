@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-
-const BASE_URL = process.env.ROUTER_BASE_URL || 'https://router-api-testnet.integratenetwork.work/v1';
+import type { AgentState } from './agent-core';
+import type { NetworkId } from './networks';
+import { routerConfig } from './router-config';
 
 const PALETTE = [
   'emerald green', 'warm amber-gold', 'cool steel-blue', 'soft violet',
@@ -30,17 +31,42 @@ export function avatarPrompt(personality: string): string {
   );
 }
 
-export async function generateAvatar(personality: string): Promise<Uint8Array> {
-  if (!process.env.ROUTER_API_KEY) throw new Error('ROUTER_API_KEY is not set');
+/** Prompt for regenerating a portrait after the soul has learned about its owner. */
+export function evolveAvatarPrompt(state: Pick<AgentState, 'personality' | 'memorySummary' | 'keyFacts'>): string {
+  const facts = state.keyFacts.length ? state.keyFacts.slice(0, 6).join('; ') : '(none yet)';
+  const summary = state.memorySummary?.trim() || '(still forming)';
+  const clip = state.personality.length > 120 ? state.personality.slice(0, 120) : state.personality;
+  return (
+    `Evolve this glowing soul emblem to reflect a deeper, lived-in character. ` +
+    `Core personality: "${clip}". ` +
+    `What they have learned: ${summary}. Key facts: ${facts}. ` +
+    `Add subtle new symbols, wear, or aura that show growth — same CRT pixel-art soul, scanlines, diamond motifs, dark background. ` +
+    `Centered, iconic, 512x512.`
+  );
+}
+
+export async function generateAvatar(
+  personality: string,
+  opts?: { evolve?: boolean; memorySummary?: string; keyFacts?: string[]; network?: NetworkId },
+): Promise<Uint8Array> {
+  const network = opts?.network ?? 'testnet';
+  const { baseURL, apiKey } = routerConfig(network);
+  const prompt = opts?.evolve
+    ? evolveAvatarPrompt({
+        personality,
+        memorySummary: opts.memorySummary ?? '',
+        keyFacts: opts.keyFacts ?? [],
+      })
+    : avatarPrompt(personality);
   const baseBytes = await readFile(path.join(process.cwd(), 'public', 'avatar-base.png'));
   const form = new FormData();
   form.append('model', 'qwen-image-edit');
-  form.append('prompt', avatarPrompt(personality));
+  form.append('prompt', prompt);
   form.append('size', '512x512');
   form.append('image', new Blob([baseBytes], { type: 'image/png' }), 'base.png');
-  const res = await fetch(`${BASE_URL}/images/edits`, {
+  const res = await fetch(`${baseURL}/images/edits`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.ROUTER_API_KEY}` },
+    headers: { Authorization: `Bearer ${apiKey}` },
     body: form,
   });
   if (!res.ok) throw new Error(`image edit failed: ${res.status} ${await res.text().catch(() => '')}`.trim());

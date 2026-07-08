@@ -13,6 +13,20 @@ Built for **[The Zero Cup - 0G's Global Vibe Coding Tournament](https://0g.ai/ar
 
 ---
 
+## New in the Quarter Finals (v0.5)
+
+- 🎭 **Evolve portrait** - regenerate your Soul's face on 0G Image as it learns about you;
+  updates the on-chain public profile so wallets and the gallery show the growth.
+- 🌐 **Dual-network** - mint and explore on **Galileo testnet** or **0G Mainnet** (Aristotle);
+  network switcher in the titlebar. **Live on mainnet:** verified `SoulINFT` at
+  [`0x9BDe…9761C`](https://chainscan.0g.ai/address/0x9BDe8f9a9Aa62BDBc10Cf35abA25B444Ce09761C#code).
+- 🎙️ **Interactive séance** - choose slow, normal, or manual pacing; spirits pause between
+  lines so you can actually follow the conversation.
+- ⚡ **Faster gallery** - multicall batch reads + server cache; skeleton loading states.
+- ✨ **UX polish** — chat stays focused after send; transfer uses a proper modal.
+
+---
+
 ## New in the Round of 16
 
 - 🧬 **Custom characters** - pick from 8 presets or **write your own** personality;
@@ -75,13 +89,17 @@ Soul is genuinely 0G-native, not an API wrapper. All three layers do real work:
 
 | 0G layer | What it does in Soul | Where in the code |
 |----------|----------------------|-------------------|
-| **0G Compute** | Two models: streaming chat replies (`qwen2.5-omni`) **and** avatar generation (`qwen-image-edit`), both OpenAI-compatible via the Compute Router. | [`lib/og-compute.ts`](lib/og-compute.ts), [`lib/og-image.ts`](lib/og-image.ts), [`app/api/chat/route.ts`](app/api/chat/route.ts), [`app/api/avatar/route.ts`](app/api/avatar/route.ts) |
+| **0G Compute** | Two models: streaming chat replies (`qwen2.5-omni`) **and** avatar generation (`qwen-image-edit`), both OpenAI-compatible via the Compute Router. Testnet and mainnet use **separate** router endpoints and API keys. | [`lib/router-config.ts`](lib/router-config.ts), [`lib/og-compute.ts`](lib/og-compute.ts), [`lib/og-image.ts`](lib/og-image.ts) |
 | **0G Storage** | The **public profile** (plaintext JSON: name, personality, avatar pointer), the **encrypted private memory** (AES-GCM ciphertext), and the **avatar PNG** are all uploaded and fetched by **root hash** - no centralized DB. The private plaintext is encrypted client-side, so the server only ever handles ciphertext. | [`lib/og-storage.ts`](lib/og-storage.ts), [`app/api/blob/route.ts`](app/api/blob/route.ts), [`lib/crypto.ts`](lib/crypto.ts) |
 | **0G Chain** | The companion is an **ERC-7857 INFT** (`SoulINFT`) - ERC-721 plus per-token `publicURI`, `encryptedURI`, `metadataHash`, and a `sealedKey`, with an oracle-verified `transfer(from,to,id,sealedKey,proof)`. Only the owner can `setMemory` / `setPublicProfile`; on transfer the private memory is cleared so it stays encrypted to the sender. A `MockOracle` stands in for 0G's TEE/ZKP oracle on testnet. | [`contracts/SoulINFT.sol`](contracts/SoulINFT.sol), [`contracts/MockOracle.sol`](contracts/MockOracle.sol), [`app/api/nft/[id]/route.ts`](app/api/nft/[id]/route.ts), [`lib/contract.ts`](lib/contract.ts), [`lib/chain.ts`](lib/chain.ts) |
 
 **Deployed contracts (0G Galileo testnet, chain `16602`):**
 - `SoulINFT` (ERC-7857): [`0x956C346365e0D538cA5c6DB071B7a83F9c57E656`](https://chainscan-galileo.0g.ai/address/0x956C346365e0D538cA5c6DB071B7a83F9c57E656)
 - `MockOracle`: [`0xe76b9C55c78A2eDb80f7C9248D487Ada9Ce22D4e`](https://chainscan-galileo.0g.ai/address/0xe76b9C55c78A2eDb80f7C9248D487Ada9Ce22D4e)
+
+**Mainnet (Aristotle, chain `16661`):**
+- `SoulINFT` (ERC-7857): [`0x9BDe8f9a9Aa62BDBc10Cf35abA25B444Ce09761C`](https://chainscan.0g.ai/address/0x9BDe8f9a9Aa62BDBc10Cf35abA25B444Ce09761C#code) ✓ verified
+- `MockOracle`: [`0x2bc3f0AfB556152c11ecAE21549DeD65a5FF3703`](https://chainscan.0g.ai/address/0x2bc3f0AfB556152c11ecAE21549DeD65a5FF3703#code) ✓ verified
 
 ### Two-wallet model (so judges don't mistake it for centralized)
 - A **server wallet** pays the gas to write memory blobs to 0G Storage (a server-side
@@ -132,11 +150,15 @@ npm run dev                  # http://localhost:3000
 
 | Variable | What | Public? |
 |----------|------|---------|
-| `ROUTER_API_KEY` | 0G Compute Router key (from pc.0g.ai) | server-only |
-| `ROUTER_BASE_URL` | `https://router-api-testnet.integratenetwork.work/v1` | server-only |
-| `ROUTER_MODEL` | `qwen2.5-omni` | server-only |
+| `ROUTER_API_KEY` | 0G Compute Router key (from [pc.testnet.0g.ai](https://pc.testnet.0g.ai)) | server-only |
+| `ROUTER_BASE_URL` | Testnet router — default `https://router-api-testnet.integratenetwork.work/v1` | server-only |
+| `ROUTER_MODEL` | e.g. `qwen2.5-omni` | server-only |
+| `ROUTER_MAINNET_API_KEY` | Mainnet router key (from [pc.0g.ai](https://pc.0g.ai)) — **separate** from testnet | server-only |
+| `ROUTER_MAINNET_BASE_URL` | Mainnet router — default `https://router-api.0g.ai/v1` | server-only |
+| `ROUTER_MAINNET_MODEL` | Optional mainnet model override; falls back to `ROUTER_MODEL` | server-only |
 | `PRIVATE_KEY` | Server wallet (funded on Galileo) for Storage gas | **server-only - never commit** |
-| `NEXT_PUBLIC_CONTRACT_ADDRESS` | Deployed SoulAgent address | public |
+| `NEXT_PUBLIC_CONTRACT_ADDRESS` | Deployed SoulINFT on Galileo testnet | public |
+| `NEXT_PUBLIC_MAINNET_CONTRACT_ADDRESS` | Deployed SoulINFT on Aristotle mainnet | public |
 | `NEXT_PUBLIC_WC_PROJECT_ID` | WalletConnect id (optional; MetaMask works without it) | public |
 
 Get testnet 0G from the [faucet](https://faucet.0g.ai). Add the Galileo network

@@ -4,13 +4,12 @@ import '@rainbow-me/rainbowkit/styles.css';
 import { RainbowKitProvider, getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { galileo } from '@/lib/chain';
+import { galileo, aristotle } from '@/lib/networks';
 
 const config = getDefaultConfig({
   appName: 'Soul',
-  // A real WalletConnect projectId enables mobile QR; injected (MetaMask) works without it.
   projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID || 'soul-demo',
-  chains: [galileo],
+  chains: [galileo, aristotle],
   ssr: true,
 });
 

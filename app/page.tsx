@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useAccount } from 'wagmi';
+import { useAccount, useChainId } from 'wagmi';
 import { Terminal, SoulBanner } from '@/components/Terminal';
 import { ChatConsole } from '@/components/ChatConsole';
+import { galleryNetwork } from '@/components/NetworkSwitcher';
 import { listSouls, avatarUrl, type SoulRef } from '@/lib/soul-client';
 import type { AgentState } from '@/lib/agent-core';
 
@@ -20,10 +21,11 @@ const PRESETS = [
 ];
 
 const BOOT = [
-  'booting soul kernel v0.4 …',
+  'booting soul kernel v0.5 …',
   'mounting 0G Storage … ok',
   'linking 0G Compute router … ok',
-  'attaching 0G Chain (galileo:16602) … ok',
+  'attaching testnet 0G Chain (galileo:16602) … ok',
+  'attaching mainnet 0G Chain (aristotle:16661) … ok',
   'memory lives on-chain.',
 ];
 
@@ -38,6 +40,8 @@ export default function Home() {
   const [genning, setGenning] = useState(false);
   const [genError, setGenError] = useState<string>();
   const { address } = useAccount();
+  const chainId = useChainId();
+  const network = galleryNetwork(chainId);
   const [souls, setSouls] = useState<SoulRef[]>([]);
   useEffect(() => {
     setSouls(address ? listSouls(address) : []);
@@ -195,7 +199,7 @@ export default function Home() {
                     const res = await fetch('/api/avatar', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ personality: activePersona }),
+                      body: JSON.stringify({ personality: activePersona, network }),
                     });
                     const j = await res.json().catch(() => ({}));
                     if (!res.ok || !j.rootHash) throw new Error(j.error || `generation failed (${res.status})`);
@@ -226,7 +230,7 @@ export default function Home() {
               {avatarRootHash && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={avatarUrl(avatarRootHash)}
+                  src={avatarUrl(avatarRootHash, network)}
                   alt="avatar preview"
                   className="mt-2 h-20 w-20 rounded-sm border border-[var(--phosphor-deep)]"
                 />

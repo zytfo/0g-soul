@@ -3,32 +3,30 @@ import type { PromptMessage, AgentState } from './agent-core';
 import { buildSeanceMessages } from './agent-core';
 import { parseDistill, type Distilled } from './distill';
 import type { SoulProfile, SeanceLine } from './soul-types';
+import type { NetworkId } from './networks';
+import { routerConfig, routerModel } from './router-config';
 
-const BASE_URL =
-  process.env.ROUTER_BASE_URL || 'https://router-api-testnet.integratenetwork.work/v1';
-
-const client = new OpenAI({
-  apiKey: process.env.ROUTER_API_KEY,
-  baseURL: BASE_URL,
-  maxRetries: 1, // fail fast so the UI local-fallback can take over during a live demo
-  timeout: 20000,
-});
+function client(network: NetworkId) {
+  const { baseURL, apiKey } = routerConfig(network);
+  return new OpenAI({
+    apiKey,
+    baseURL,
+    maxRetries: 1,
+    timeout: 20000,
+  });
+}
 
 /** Send a chat completion through the 0G Compute Router (OpenAI-compatible). */
-export async function chat(messages: PromptMessage[]): Promise<string> {
-  const model = process.env.ROUTER_MODEL || process.env.MODEL;
-  if (!model) throw new Error('ROUTER_MODEL is not set');
-  if (!process.env.ROUTER_API_KEY) throw new Error('ROUTER_API_KEY is not set');
-  const res = await client.chat.completions.create({ model, messages });
+export async function chat(messages: PromptMessage[], network: NetworkId = 'testnet'): Promise<string> {
+  const model = routerModel(network);
+  const res = await client(network).chat.completions.create({ model, messages });
   return res.choices[0]?.message?.content ?? '';
 }
 
 /** Stream a chat completion through the 0G Compute Router (OpenAI-compatible). */
-export async function chatStream(messages: PromptMessage[]): Promise<AsyncIterable<string>> {
-  const model = process.env.ROUTER_MODEL || process.env.MODEL;
-  if (!model) throw new Error('ROUTER_MODEL is not set');
-  if (!process.env.ROUTER_API_KEY) throw new Error('ROUTER_API_KEY is not set');
-  const stream = await client.chat.completions.create({ model, messages, stream: true });
+export async function chatStream(messages: PromptMessage[], network: NetworkId = 'testnet'): Promise<AsyncIterable<string>> {
+  const model = routerModel(network);
+  const stream = await client(network).chat.completions.create({ model, messages, stream: true });
   async function* gen() {
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta?.content;
@@ -38,12 +36,17 @@ export async function chatStream(messages: PromptMessage[]): Promise<AsyncIterab
   return gen();
 }
 
-export function seanceTurn(speaker: SoulProfile, otherName: string, transcript: SeanceLine[]): Promise<AsyncIterable<string>> {
-  return chatStream(buildSeanceMessages(speaker, otherName, transcript));
+export function seanceTurn(
+  speaker: SoulProfile,
+  otherName: string,
+  transcript: SeanceLine[],
+  network: NetworkId = 'testnet',
+): Promise<AsyncIterable<string>> {
+  return chatStream(buildSeanceMessages(speaker, otherName, transcript), network);
 }
 
 /** Ask 0G Compute to distill what the companion should remember about the USER. */
-export async function distillMemory(state: AgentState): Promise<Distilled> {
+export async function distillMemory(state: AgentState, network: NetworkId = 'testnet'): Promise<Distilled> {
   const convo = state.history.map((m) => `${m.role}: ${m.content}`).join('\n');
   const messages: PromptMessage[] = [
     {
@@ -57,5 +60,5 @@ export async function distillMemory(state: AgentState): Promise<Distilled> {
     },
     { role: 'user', content: convo || '(no conversation yet)' },
   ];
-  return parseDistill(await chat(messages)); // reuses chat()'s model + ROUTER_API_KEY guards
+  return parseDistill(await chat(messages, network));
 }

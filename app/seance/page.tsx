@@ -2,13 +2,17 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useChainId } from 'wagmi';
 import { Terminal } from '@/components/Terminal';
+import { galleryNetwork } from '@/components/NetworkSwitcher';
 import { avatarUrl } from '@/lib/soul-client';
 
 type Card = { tokenId: string; name: string; avatarRootHash: string | null };
 
 export default function SeancePicker() {
   const router = useRouter();
+  const chainId = useChainId();
+  const network = galleryNetwork(chainId);
   const [opts, setOpts] = useState<Card[]>([]);
   const [a, setA] = useState('');
   const [b, setB] = useState('');
@@ -17,13 +21,17 @@ export default function SeancePicker() {
   const started = useRef(false);
 
   useEffect(() => {
-    if (started.current) return; // guard React Strict Mode double-invoke
+    started.current = false;
+  }, [network]);
+
+  useEffect(() => {
+    if (started.current) return;
     started.current = true;
-    fetch('/api/gallery')
+    fetch(`/api/gallery?network=${network}`)
       .then((r) => r.json())
       .then((j) => setOpts((j.souls ?? []) as Card[]))
       .catch(() => setOpts([]));
-  }, []);
+  }, [network]);
 
   const isId = (v: string) => /^\d+$/.test(v.trim());
   const ready = isId(a) && isId(b) && a.trim() !== b.trim();
@@ -43,7 +51,10 @@ export default function SeancePicker() {
     setErr('');
     setChecking(true);
     try {
-      const [ra, rb] = await Promise.all([fetch(`/api/soul/${a.trim()}`), fetch(`/api/soul/${b.trim()}`)]);
+      const [ra, rb] = await Promise.all([
+        fetch(`/api/soul/${a.trim()}?network=${network}`),
+        fetch(`/api/soul/${b.trim()}?network=${network}`),
+      ]);
       const missing: string[] = [];
       if (!ra.ok) missing.push(a.trim());
       if (!rb.ok) missing.push(b.trim());
@@ -97,7 +108,7 @@ export default function SeancePicker() {
                       <span className="absolute right-1 top-1 rounded-sm bg-[var(--phosphor)] px-1 text-[10px] font-bold text-[#03130b]">{slot}</span>
                     )}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={avatarUrl(s.avatarRootHash ?? undefined)} alt="" className="mb-1 aspect-square w-full rounded-sm border border-[var(--phosphor-deep)] object-cover" />
+                    <img src={avatarUrl(s.avatarRootHash ?? undefined, network)} alt="" className="mb-1 aspect-square w-full rounded-sm border border-[var(--phosphor-deep)] object-cover" />
                     <p className="glow truncate text-xs">{s.name}</p>
                     <p className="text-[10px] text-[var(--phosphor-deep)]">#{s.tokenId}</p>
                   </button>
