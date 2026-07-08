@@ -62,4 +62,32 @@ describe('generateAvatar error paths', () => {
     );
     await expect(generateAvatar('warm')).rejects.toThrow(/no image/);
   });
+
+  it('throws when mainnet ROUTER_MAINNET_API_KEY is missing', async () => {
+    vi.stubEnv('ROUTER_MAINNET_API_KEY', '');
+    await expect(generateAvatar('warm', { network: 'mainnet' })).rejects.toThrow(/ROUTER_MAINNET_API_KEY/);
+  });
+
+  it('mainnet uses z-image-turbo via generations endpoint', async () => {
+    vi.stubEnv('ROUTER_MAINNET_API_KEY', 'k');
+    const b64 = Buffer.from('png').toString('base64');
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ data: [{ b64_json: b64 }] }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    await generateAvatar('warm', { network: 'mainnet' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/images/generations'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer k',
+          'Content-Type': 'application/json',
+        }),
+      }),
+    );
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.model).toBe('z-image-turbo');
+    expect(body.response_format).toBe('b64_json');
+  });
 });

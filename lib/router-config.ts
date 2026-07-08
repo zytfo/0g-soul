@@ -33,3 +33,11 @@ export function routerModel(network: NetworkId = 'testnet'): string {
   if (!m) throw new Error('ROUTER_MODEL is not set');
   return m;
 }
+
+/** Avatar image model — testnet uses image-edit; mainnet uses text-to-image. */
+export function imageModel(network: NetworkId = 'testnet'): string {
+  if (network === 'mainnet') {
+    return process.env.ROUTER_MAINNET_IMAGE_MODEL || 'z-image-turbo';
+  }
+  return process.env.ROUTER_IMAGE_MODEL || 'qwen-image-edit';
+}

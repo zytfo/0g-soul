@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentState } from './agent-core';
 import type { NetworkId } from './networks';
-import { routerConfig } from './router-config';
+import { imageModel, routerConfig } from './router-config';
 
 const PALETTE = [
   'emerald green', 'warm amber-gold', 'cool steel-blue', 'soft violet',
@@ -45,22 +45,28 @@ export function evolveAvatarPrompt(state: Pick<AgentState, 'personality' | 'memo
   );
 }
 
-export async function generateAvatar(
-  personality: string,
-  opts?: { evolve?: boolean; memorySummary?: string; keyFacts?: string[]; network?: NetworkId },
+/** Mainnet text-to-image has no base reference — rephrase edit-oriented prompts. */
+function textToImagePrompt(prompt: string): string {
+  return prompt
+    .replace(/^Reimagine this glowing soul/i, 'Create a glowing soul')
+    .replace(/^Evolve this glowing soul emblem/i, 'Create an evolved glowing soul emblem');
+}
+
+function parseImageResponse(json: unknown): Uint8Array {
+  const b64 = (json as { data?: { b64_json?: string }[] })?.data?.[0]?.b64_json;
+  if (!b64) throw new Error('no image in response');
+  return new Uint8Array(Buffer.from(b64, 'base64'));
+}
+
+async function generateAvatarViaEdit(
+  baseURL: string,
+  apiKey: string,
+  model: string,
+  prompt: string,
 ): Promise<Uint8Array> {
-  const network = opts?.network ?? 'testnet';
-  const { baseURL, apiKey } = routerConfig(network);
-  const prompt = opts?.evolve
-    ? evolveAvatarPrompt({
-        personality,
-        memorySummary: opts.memorySummary ?? '',
-        keyFacts: opts.keyFacts ?? [],
-      })
-    : avatarPrompt(personality);
   const baseBytes = await readFile(path.join(process.cwd(), 'public', 'avatar-base.png'));
   const form = new FormData();
-  form.append('model', 'qwen-image-edit');
+  form.append('model', model);
   form.append('prompt', prompt);
   form.append('size', '512x512');
   form.append('image', new Blob([baseBytes], { type: 'image/png' }), 'base.png');
@@ -70,8 +76,50 @@ export async function generateAvatar(
     body: form,
   });
   if (!res.ok) throw new Error(`image edit failed: ${res.status} ${await res.text().catch(() => '')}`.trim());
-  const json = await res.json();
-  const b64 = json?.data?.[0]?.b64_json;
-  if (!b64) throw new Error('no image in response');
-  return new Uint8Array(Buffer.from(b64, 'base64'));
+  return parseImageResponse(await res.json());
+}
+
+async function generateAvatarViaGeneration(
+  baseURL: string,
+  apiKey: string,
+  model: string,
+  prompt: string,
+): Promise<Uint8Array> {
+  const res = await fetch(`${baseURL}/images/generations`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      prompt,
+      n: 1,
+      size: '1024x1024',
+      response_format: 'b64_json',
+    }),
+  });
+  if (!res.ok) throw new Error(`image generation failed: ${res.status} ${await res.text().catch(() => '')}`.trim());
+  return parseImageResponse(await res.json());
+}
+
+export async function generateAvatar(
+  personality: string,
+  opts?: { evolve?: boolean; memorySummary?: string; keyFacts?: string[]; network?: NetworkId },
+): Promise<Uint8Array> {
+  const network = opts?.network ?? 'testnet';
+  const { baseURL, apiKey } = routerConfig(network);
+  const model = imageModel(network);
+  const prompt = opts?.evolve
+    ? evolveAvatarPrompt({
+        personality,
+        memorySummary: opts.memorySummary ?? '',
+        keyFacts: opts.keyFacts ?? [],
+      })
+    : avatarPrompt(personality);
+
+  if (network === 'mainnet') {
+    return generateAvatarViaGeneration(baseURL, apiKey, model, textToImagePrompt(prompt));
+  }
+  return generateAvatarViaEdit(baseURL, apiKey, model, prompt);
 }

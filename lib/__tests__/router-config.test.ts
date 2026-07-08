@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { routerConfig, routerModel } from '../router-config';
+import { imageModel, routerConfig, routerModel } from '../router-config';
 
 describe('routerConfig', () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -38,5 +38,22 @@ describe('routerModel', () => {
     vi.stubEnv('ROUTER_MAINNET_MODEL', 'glm-main');
     vi.stubEnv('ROUTER_MODEL', 'qwen2.5-omni');
     expect(routerModel('mainnet')).toBe('glm-main');
+  });
+});
+
+describe('imageModel', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('defaults to qwen-image-edit on testnet', () => {
+    expect(imageModel('testnet')).toBe('qwen-image-edit');
+  });
+
+  it('defaults to z-image-turbo on mainnet', () => {
+    expect(imageModel('mainnet')).toBe('z-image-turbo');
+  });
+
+  it('respects ROUTER_MAINNET_IMAGE_MODEL override', () => {
+    vi.stubEnv('ROUTER_MAINNET_IMAGE_MODEL', 'custom-image');
+    expect(imageModel('mainnet')).toBe('custom-image');
   });
 });
